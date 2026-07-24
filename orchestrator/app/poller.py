@@ -68,7 +68,9 @@ async def _task_tick(store, devin, gh, t: dict[str, Any]) -> None:
     if pr_number and gh:
         # Stamp devin/compliance on the remediation PR (Devin's own vetted fix) so it can merge under
         # branch protection: pending while Devin works, success once the fix is in and reviewable.
-        ready = phase == "done" or fixed
+        # `blocked` counts as ready here — the remediation PR already exists (pr_number is set), so the
+        # fix has been pushed; Devin lingering in blocked/awaiting is not "still working".
+        ready = phase in ("done", "blocked") or fixed
         state = "success" if ready else "pending"
         desc = (f"Sentinel remediation for issue #{issue} — ready for review" if ready
                 else f"Sentinel remediating issue #{issue}…")
