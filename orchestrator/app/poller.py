@@ -69,6 +69,17 @@ async def _task_tick(store, devin, gh, t: dict[str, Any]) -> None:
             fields["pr_number"] = found
             store.log("remediate", f"issue #{issue}: remediation PR #{found} opened", issue)
 
+    if pr_number and gh and not (fields.get("summary") or t.get("summary")):
+        # Devin doesn't always fill structured_output, but it ALWAYS writes a PR body — derive the
+        # human-readable "what Devin did" from there so the dashboard shows real work, not a blank.
+        try:
+            p = await asyncio.to_thread(gh.get_pr, int(pr_number))
+            summ = _extract_summary(p.get("body") or "") or p.get("title", "")
+            if summ:
+                fields["summary"] = summ[:400]
+        except Exception:
+            pass
+
     if pr_number and gh:
         # Stamp devin/compliance on the remediation PR (Devin's own vetted fix) so it can merge under
         # branch protection: pending while Devin works, success once the fix is in and reviewable.
@@ -205,6 +216,22 @@ def _plan_text(s: dict) -> str:
         v = s.get(k)
         if isinstance(v, str) and v:
             return v[:500]
+    return ""
+
+
+def _extract_summary(body: str) -> str:
+    """Pull a human-readable summary out of a Devin PR body — the `### SUMMARY` section if present,
+    else the first non-marker paragraph. Strips the `Closes #N` line and markdown noise."""
+    import re
+    if not body:
+        return ""
+    m = re.search(r"#+\s*summary\s*\n(.+?)(?:\n#+\s|\Z)", body, re.I | re.S)
+    chunk = m.group(1) if m else body
+    for line in chunk.splitlines():
+        s = line.strip().lstrip("#").strip()
+        if not s or s.lower().startswith(("closes #", "fixes #", "resolves #")):
+            continue
+        return re.sub(r"[`*_]", "", s)
     return ""
 
 
