@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -69,16 +70,33 @@ def attach_devin(pr: int, title: str, base: str, head: str, sha: str) -> dict[st
     return {"pr": pr, "session_id": sid, "session_url": session.get("url")}
 
 
+def attach_by_number(pr_number: int) -> dict[str, Any]:
+    """Attach by PR number (used by tagging + chat). Fetches the PR from GitHub, then dispatches."""
+    if not gh:
+        return {"error": "GH_PERSONAL_TOKEN required to attach by PR number"}
+    p = gh.get_pr(pr_number)
+    return attach_devin(pr_number, p.get("title", ""), p["base"]["ref"], p["head"]["ref"],
+                        p["head"]["sha"])
+
+
 @app.post("/webhook/github")
 async def github_webhook(request: Request):
     event = request.headers.get("X-GitHub-Event", "")
     payload = await request.json()
+    # 1) automatic: a PR is opened
     if event == "pull_request" and payload.get("action") in ("opened", "reopened", "ready_for_review"):
         pr = payload["pull_request"]
         return attach_devin(
             pr=pr["number"], title=pr.get("title", ""),
             base=pr["base"]["ref"], head=pr["head"]["ref"], sha=pr["head"]["sha"],
         )
+    # 2) tagging: someone @-mentions Sentinel/Devin in a PR comment
+    if event == "issue_comment" and payload.get("action") == "created":
+        body = ((payload.get("comment") or {}).get("body") or "").lower()
+        issue = payload.get("issue") or {}
+        if issue.get("pull_request") and any(m in body for m in ("@sentinel", "@devin")):
+            store.log("trigger", f"tagged on PR #{issue['number']}", issue["number"])
+            return attach_by_number(issue["number"])
     return {"ignored": event, "action": payload.get("action")}
 
 
@@ -125,6 +143,14 @@ async def chat(body: dict[str, Any]):
     msg = (body.get("message") or "").strip()
     session_id = body.get("session_id")
     store.add_chat("user", msg, session_id)
+    # chat-initiated review: "review PR 123" / "@sentinel review 123"
+    m = re.search(r"review\s+(?:pr\s*)?#?(\d+)", msg, re.I)
+    if m and not session_id:
+        res = attach_by_number(int(m.group(1)))
+        reply = (f"Attaching Devin to PR #{m.group(1)} — session {res.get('session_id', '?')}."
+                 if "session_id" in res else res.get("error", "attach failed"))
+        store.add_chat("sentinel", reply)
+        return {"reply": reply, "attach": res}
     # steer a live session if one is targeted, else answer from state
     if session_id:
         try:
