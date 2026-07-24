@@ -51,5 +51,10 @@ docker compose build >/dev/null 2>&1 && ok "image built" || die "docker compose 
 
 echo "───────────────────────────────────────────────────────────────"
 ok "Setup complete."
-echo "    Next:  docker compose up      →  http://localhost:8080  →  click \"▶ Run Demo\""
-echo "    Or:    make up                 (background) ;  make demo   (trigger via CLI)"
+echo "    Run:   docker compose up        →  http://localhost:8080   (walkthrough: /how-it-works.html)"
+echo ""
+echo "    Then drive it from the dashboard's Demo Control, or the CLI:"
+echo "      ./demo.sh reset               clean the fork to a repeatable baseline"
+echo "      ./demo.sh issue 5             Devin remediates issue #5 → PR that Closes #5"
+echo "      ./demo.sh gate-pr             open a flawed PR → Devin's compliance gate"
+echo "    (make up / make down / make logs also available.)"
