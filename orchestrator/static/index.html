@@ -3,167 +3,683 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Sentinel — compliance & docs gate</title>
+<title>Sentinel — compliance control plane</title>
 <style>
-  :root{
-    --bg:#0b0f14; --panel:#121822; --panel2:#0f141d; --line:#1e2733;
-    --ink:#e6edf3; --muted:#8b98a8; --accent:#3fb950; --accentdim:#1f6f34;
-    --crit:#f85149; --high:#ff7b72; --med:#d29922; --low:#58a6ff; --info:#6e7681;
-    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  :root {
+    --bg: #f4f7fa; --surface: #ffffff; --surface-2: #eef2f7; --line: #d9e1ea;
+    --text: #14202e; --muted: #55697f;
+    --accent: #0c8f9c; --accent-2: #0a707a; --accent-soft: #d7eff1;
+    --ok: #17823b; --ok-soft: #dcefe0; --warn: #a86d05; --warn-soft: #f6ecd2; --crit: #c93a26; --crit-soft: #f6dfd9;
+    --gh: #5a6b80; --devin: #8a5cd6; --devin-soft: #ece2fb; --human: #17823b;
+    --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --maxw: 1120px;
+    --shadow: 0 1px 2px rgba(16,32,48,.04), 0 6px 22px rgba(16,32,48,.05);
   }
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-  header{display:flex;align-items:center;gap:14px;padding:14px 20px;border-bottom:1px solid var(--line);background:var(--panel2)}
-  header .logo{width:26px;height:26px;border-radius:6px;background:linear-gradient(135deg,var(--accent),var(--accentdim));display:grid;place-items:center;font-weight:800;color:#04240f}
-  header h1{font-size:16px;margin:0;letter-spacing:.2px}
-  header .target{font-family:var(--mono);color:var(--muted);font-size:12px}
-  header .spacer{flex:1}
-  button{font:inherit;color:var(--ink);background:#1b2430;border:1px solid var(--line);border-radius:8px;padding:7px 12px;cursor:pointer}
-  button.primary{background:var(--accentdim);border-color:var(--accent);color:#eafff0;font-weight:600}
-  button:hover{filter:brightness(1.15)}
-  main{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:14px 20px;max-width:1500px;margin:0 auto}
-  .full{grid-column:1/-1}
-  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
-  .panel h2{font-size:12px;text-transform:uppercase;letter-spacing:.14em;color:var(--muted);margin:0 0 10px}
-  .tiles{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
-  .tile{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px}
-  .tile .n{font-size:26px;font-weight:700;font-family:var(--mono)}
-  .tile .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
-  table{width:100%;border-collapse:collapse;font-size:13px}
-  th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
-  th{color:var(--muted);font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.08em}
-  .pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:11px;font-family:var(--mono);border:1px solid var(--line)}
-  .running{color:var(--low);border-color:#213b57}.done{color:var(--accent);border-color:var(--accentdim)}
-  .blocked{color:var(--med);border-color:#4a3c12}.pending{color:var(--med)}.success{color:var(--accent)}.failure{color:var(--crit)}
-  .sev-critical{color:var(--crit)}.sev-high{color:var(--high)}.sev-medium{color:var(--med)}.sev-low{color:var(--low)}.sev-info{color:var(--info)}
-  a{color:var(--low);text-decoration:none}a:hover{text-decoration:underline}
-  .bar{height:8px;border-radius:6px;background:#20293a;overflow:hidden;display:flex}
-  .bar i{display:block;height:100%}
-  .kanban{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
-  .col h3{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:0 0 8px}
-  .card{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:8px;font-size:12px}
-  .card .c{font-family:var(--mono);color:var(--muted);font-size:11px}
-  #chatlog{height:220px;overflow:auto;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px;font-size:13px}
-  .msg{margin-bottom:8px}.msg .who{font-family:var(--mono);font-size:11px;color:var(--muted)}
-  .msg.user .who{color:var(--low)}.msg.sentinel .who{color:var(--accent)}
-  .row{display:flex;gap:8px;margin-top:8px}.row input{flex:1;background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:8px}
-  .muted{color:var(--muted)}.mono{font-family:var(--mono)}
-  .plan{font-size:12px;color:var(--muted);max-width:340px;white-space:pre-wrap}
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0a121b; --surface: #121e2c; --surface-2: #172536; --line: #26374d;
+      --text: #e4ecf5; --muted: #8ba0b8;
+      --accent: #38cdda; --accent-2: #6fe0ea; --accent-soft: #103138;
+      --ok: #46c464; --ok-soft: #13301c; --warn: #e6a821; --warn-soft: #33270a; --crit: #f2604c; --crit-soft: #351712;
+      --gh: #93a6bd; --devin: #b48ef0; --devin-soft: #221839; --human: #46c464;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 22px rgba(0,0,0,.28);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0a121b; --surface: #121e2c; --surface-2: #172536; --line: #26374d;
+    --text: #e4ecf5; --muted: #8ba0b8;
+    --accent: #38cdda; --accent-2: #6fe0ea; --accent-soft: #103138;
+    --ok: #46c464; --ok-soft: #13301c; --warn: #e6a821; --warn-soft: #33270a; --crit: #f2604c; --crit-soft: #351712;
+    --gh: #93a6bd; --devin: #b48ef0; --devin-soft: #221839; --human: #46c464;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 22px rgba(0,0,0,.28);
+  }
+  :root[data-theme="light"] {
+    --bg: #f4f7fa; --surface: #ffffff; --surface-2: #eef2f7; --line: #d9e1ea;
+    --text: #14202e; --muted: #55697f;
+    --accent: #0c8f9c; --accent-2: #0a707a; --accent-soft: #d7eff1;
+    --ok: #17823b; --ok-soft: #dcefe0; --warn: #a86d05; --warn-soft: #f6ecd2; --crit: #c93a26; --crit-soft: #f6dfd9;
+    --gh: #5a6b80; --devin: #8a5cd6; --devin-soft: #ece2fb; --human: #17823b;
+    --shadow: 0 1px 2px rgba(16,32,48,.04), 0 6px 22px rgba(16,32,48,.05);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: var(--font-sans); line-height: 1.55;
+    -webkit-font-smoothing: antialiased; font-size: 16px;
+  }
+  .num { font-variant-numeric: tabular-nums; }
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 22px; }
+  a { color: var(--accent-2); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+
+  .eyebrow {
+    font-family: var(--font-mono); font-size: 12px; letter-spacing: .16em;
+    text-transform: uppercase; color: var(--accent); font-weight: 600;
+  }
+  .mono { font-family: var(--font-mono); }
+
+  /* ---------- header ---------- */
+  header { padding: 34px 0 22px; border-bottom: 1px solid var(--line); }
+  .brandline { display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+  .mark {
+    width: 46px; height: 46px; border-radius: 12px; flex: none;
+    background: linear-gradient(150deg, var(--accent), var(--accent-2));
+    display: grid; place-items: center; color: #fff; box-shadow: var(--shadow);
+  }
+  .mark svg { width: 24px; height: 24px; }
+  .brandtext { flex: 1; min-width: 240px; }
+  .brandtext h1 { font-size: 27px; letter-spacing: -.02em; margin: 2px 0 3px; font-weight: 720; }
+  .brandtext .sub { font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); }
+  .brandtext .sub b { color: var(--text); font-weight: 600; }
+  .head-right { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+  .live { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 12.5px;
+          padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--muted); }
+  .live.up { background: var(--ok-soft); border-color: transparent; color: var(--ok); }
+  .live.up .dot { background: var(--ok); }
+  .live.down { background: var(--crit-soft); border-color: transparent; color: var(--crit); }
+  .live.down .dot { background: var(--crit); }
+
+  /* ---------- toolbar ---------- */
+  .toolbar { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; align-items: center; }
+  .action { display: inline-flex; align-items: center; gap: 0; border: 1px solid var(--line);
+            border-radius: 10px; overflow: hidden; background: var(--surface); }
+  .action label { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
+                  color: var(--muted); padding: 0 4px 0 11px; }
+  .action input { width: 62px; border: none; background: transparent; color: var(--text);
+                  font-family: var(--font-mono); font-size: 13px; padding: 8px 6px; }
+  .action input:focus { outline: none; }
+  .action button, .btn {
+    font-family: var(--font-mono); font-size: 12.5px; font-weight: 600; cursor: pointer;
+    border: none; padding: 9px 13px; color: #fff; background: var(--accent-2);
+    transition: filter .15s ease;
+  }
+  .action button:hover, .btn:hover { filter: brightness(1.08); }
+  .btn.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); border-radius: 10px; }
+  .action.devin button { background: var(--devin); }
+  .spacer { flex: 1; }
+
+  /* ---------- sections ---------- */
+  section { padding: 34px 0; border-bottom: 1px solid var(--line); }
+  section:last-of-type { border-bottom: none; }
+  .sec-head { margin-bottom: 20px; }
+  .sec-head .eyebrow { display: block; margin-bottom: 6px; }
+  .sec-head h2 { font-size: 21px; letter-spacing: -.01em; margin: 0; }
+  .sec-head p { color: var(--muted); font-size: 14.5px; max-width: 64ch; margin: 5px 0 0; }
+  .sec-head .headline { float: right; font-family: var(--font-mono); font-size: 13px; color: var(--muted); }
+  .sec-head .headline b { color: var(--text); }
+
+  /* ---------- tiles ---------- */
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(178px, 1fr)); gap: 14px; }
+  .tile { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 17px 18px;
+          box-shadow: var(--shadow); }
+  .tile .label { font-family: var(--font-mono); font-size: 11px; letter-spacing: .09em; text-transform: uppercase;
+                 color: var(--muted); font-weight: 600; }
+  .tile .val { font-size: 36px; font-weight: 720; letter-spacing: -.03em; line-height: 1.05; margin-top: 10px; }
+  .tile .val .of { font-size: 18px; font-weight: 600; color: var(--muted); letter-spacing: 0; }
+  .tile .note { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); margin-top: 5px; }
+  .tile.ok .val { color: var(--ok); } .tile.ok { border-top: 3px solid var(--ok); }
+  .tile.warn .val { color: var(--warn); } .tile.warn { border-top: 3px solid var(--warn); }
+  .tile.devin .val { color: var(--devin); } .tile.devin { border-top: 3px solid var(--devin); }
+  .tile.accent .val { color: var(--accent-2); } .tile.accent { border-top: 3px solid var(--accent); }
+
+  /* ---------- track rows ---------- */
+  .track { display: flex; flex-direction: column; gap: 11px; }
+  .row { background: var(--surface); border: 1px solid var(--line); border-radius: 13px; padding: 14px 16px;
+         box-shadow: var(--shadow); }
+  .row.devin-edge { border-left: 3px solid var(--devin); }
+  .flow-scroll { overflow-x: auto; }
+  .flow { display: flex; align-items: center; gap: 9px; font-family: var(--font-mono); font-size: 12.5px;
+          width: max-content; }
+  .node { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 8px;
+          border: 1px solid var(--line); background: var(--surface-2); white-space: nowrap; color: var(--text); }
+  .node.devin { border-color: color-mix(in srgb, var(--devin) 40%, var(--line)); color: var(--devin); }
+  .node.done { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, var(--line)); }
+  .node.pending { color: var(--muted); }
+  .arrow { color: var(--muted); }
+  .pdot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .pdot.run { background: var(--warn); } .pdot.done { background: var(--accent); }
+  .pdot.ok { background: var(--ok); }
+  .row-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; margin-top: 12px; }
+  .row-title { flex: 1; min-width: 120px; font-size: 14px; color: var(--text); white-space: nowrap;
+               overflow: hidden; text-overflow: ellipsis; }
+  .row-links { display: inline-flex; gap: 12px; font-family: var(--font-mono); font-size: 12px; }
+
+  /* ---------- chips / pills ---------- */
+  .ctrl-chip { font-family: var(--font-mono); font-size: 11.5px; font-weight: 600; padding: 3px 8px;
+               border-radius: 6px; background: var(--surface-2); border: 1px solid var(--line); color: var(--muted);
+               white-space: nowrap; }
+  .pill { font-family: var(--font-mono); font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px;
+          white-space: nowrap; letter-spacing: .02em; text-transform: uppercase; }
+  .pill.crit { background: var(--crit-soft); color: var(--crit); }
+  .pill.high { background: var(--crit-soft); color: var(--crit); }
+  .pill.med  { background: var(--warn-soft); color: var(--warn); }
+  .pill.low  { background: var(--surface-2); color: var(--muted); }
+  .pill.ok   { background: var(--ok-soft); color: var(--ok); }
+  .pill.warn { background: var(--warn-soft); color: var(--warn); }
+
+  .empty { border: 1px dashed var(--line); border-radius: 13px; padding: 22px; color: var(--muted);
+           font-size: 14px; text-align: center; background: var(--surface); }
+  .empty code { font-family: var(--font-mono); font-size: 13px; background: var(--surface-2);
+                border: 1px solid var(--line); border-radius: 5px; padding: .1em .45em; color: var(--text); }
+
+  /* ---------- burn-down ---------- */
+  .burn { display: grid; grid-template-columns: 1.4fr 1fr; gap: 26px; }
+  .bars { display: flex; flex-direction: column; gap: 9px; }
+  .bar-row { display: grid; grid-template-columns: 108px 1fr 34px; gap: 12px; align-items: center; }
+  .bar-label { font-family: var(--font-mono); font-size: 12px; color: var(--muted); text-align: right;
+               overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar-track { background: var(--surface-2); border-radius: 7px; height: 24px; overflow: hidden; }
+  .bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); border-radius: 7px;
+              min-width: 3px; }
+  .bar-count { font-family: var(--font-mono); font-size: 13px; font-weight: 600; text-align: right; }
+  .sev-title { font-family: var(--font-mono); font-size: 11px; letter-spacing: .09em; text-transform: uppercase;
+               color: var(--muted); font-weight: 600; margin-bottom: 12px; }
+  .sev-list { display: flex; flex-direction: column; gap: 8px; }
+  .sev-row { display: flex; align-items: center; gap: 12px; }
+  .sev-bar { flex: 1; height: 12px; border-radius: 6px; background: var(--surface-2); overflow: hidden; }
+  .sev-bar span { display: block; height: 100%; border-radius: 6px; }
+  .sev-row .cap { font-family: var(--font-mono); font-size: 12px; text-transform: capitalize; width: 66px; }
+  .sev-row .n { font-family: var(--font-mono); font-size: 13px; font-weight: 600; width: 26px; text-align: right; }
+
+  /* ---------- ticket board ---------- */
+  .board { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 4px; }
+  .col { flex: 1; min-width: 250px; background: var(--surface-2); border: 1px solid var(--line);
+         border-radius: 13px; padding: 12px; }
+  .col h4 { margin: 2px 4px 12px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .09em;
+            text-transform: uppercase; color: var(--muted); font-weight: 600; display: flex; justify-content: space-between; }
+  .col h4 .cnt { color: var(--text); }
+  .tcard { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px;
+           margin-bottom: 9px; box-shadow: var(--shadow); }
+  .tcard:last-child { margin-bottom: 0; }
+  .tcard .tid { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  .tcard .ttl { font-size: 13.5px; margin: 4px 0 9px; overflow: hidden; text-overflow: ellipsis;
+                display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .tcard .trow { display: flex; gap: 8px; align-items: center; }
+
+  /* ---------- timeline ---------- */
+  .timeline { border: 1px solid var(--line); border-radius: 13px; background: var(--surface);
+              max-height: 380px; overflow-y: auto; box-shadow: var(--shadow); }
+  .ev { display: grid; grid-template-columns: 20px 1fr auto; gap: 11px; align-items: baseline;
+        padding: 10px 16px; border-bottom: 1px solid var(--line); }
+  .ev:last-child { border-bottom: none; }
+  .ev .k { width: 9px; height: 9px; border-radius: 50%; margin-top: 6px; background: var(--muted); }
+  .ev .txt { font-size: 13.5px; }
+  .ev .txt .kind { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+                   color: var(--muted); margin-right: 8px; }
+  .ev .when { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+
+  /* ---------- chat ---------- */
+  .chat-box { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); overflow: hidden;
+              box-shadow: var(--shadow); }
+  .messages { max-height: 340px; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 11px; }
+  .msg { max-width: 78%; padding: 9px 13px; border-radius: 13px; font-size: 14px; line-height: 1.45; }
+  .msg .meta { font-family: var(--font-mono); font-size: 10px; letter-spacing: .06em; text-transform: uppercase;
+               color: var(--muted); margin-bottom: 3px; display: block; }
+  .msg.user { align-self: flex-end; background: var(--accent-soft); color: var(--text); border-bottom-right-radius: 4px; }
+  .msg.sentinel { align-self: flex-start; background: var(--surface-2); border: 1px solid var(--line);
+                  border-bottom-left-radius: 4px; }
+  .chat-form { display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--line); background: var(--surface-2);
+               flex-wrap: wrap; }
+  .chat-form input[type=text] { border: 1px solid var(--line); background: var(--surface); color: var(--text);
+                                border-radius: 9px; padding: 10px 12px; font-family: var(--font-sans); font-size: 14px; }
+  .chat-form input.msg-in { flex: 1; min-width: 180px; }
+  .chat-form input.sess-in { width: 200px; font-family: var(--font-mono); font-size: 12px; }
+  .chat-form button { border: none; background: var(--accent-2); color: #fff; border-radius: 9px; padding: 10px 18px;
+                      font-family: var(--font-mono); font-size: 13px; font-weight: 600; cursor: pointer; }
+  .chat-form button:hover { filter: brightness(1.08); }
+
+  /* ---------- toast ---------- */
+  #toast { position: fixed; right: 20px; bottom: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 50; }
+  .toast { background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--accent);
+           border-radius: 11px; padding: 12px 15px; box-shadow: var(--shadow); max-width: 340px;
+           font-size: 13.5px; animation: rise .25s ease; }
+  .toast.err { border-left-color: var(--crit); }
+  .toast .t-h { font-weight: 640; margin-bottom: 3px; }
+  .toast .t-b { font-family: var(--font-mono); font-size: 12px; color: var(--muted); word-break: break-all; }
+  @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+  footer { padding: 26px 0 44px; color: var(--muted); font-size: 13px; font-family: var(--font-mono); }
+
+  @media (max-width: 760px) {
+    .burn { grid-template-columns: 1fr; gap: 26px; }
+    .head-right { align-items: flex-start; }
+    .sec-head .headline { float: none; display: block; margin-top: 6px; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .pdot.run { animation: pulse 1.6s ease-in-out infinite; }
+    .bar-fill, .sev-bar span { transition: width .5s ease; }
+    @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--warn) 55%, transparent); }
+                       50% { box-shadow: 0 0 0 5px transparent; } }
+  }
 </style>
 </head>
 <body>
-<header>
-  <div class="logo">S</div>
-  <div><h1>Sentinel</h1><div class="target" id="target">…</div></div>
-  <div class="spacer"></div>
-  <span class="muted mono" id="ghmode"></span>
-  <button class="primary" onclick="runDemo()">▶ Run Demo</button>
-  <button onclick="load()">↻ Refresh</button>
-</header>
+<div class="wrap">
 
-<main>
-  <section class="panel full">
-    <h2>Continuous-compliance posture</h2>
+  <header>
+    <div class="brandline">
+      <div class="mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2 4 5v6c0 5 3.5 8.5 8 11 4.5-2.5 8-6 8-11V5z"></path>
+          <path d="m9 12 2 2 4-4"></path>
+        </svg>
+      </div>
+      <div class="brandtext">
+        <span class="eyebrow">compliance control plane · Devin API</span>
+        <h1>Sentinel</h1>
+        <div class="sub">target repo · <b id="target">—</b></div>
+      </div>
+      <div class="head-right">
+        <span class="live" id="live"><span class="dot"></span><span id="liveText">connecting…</span></span>
+        <button class="btn ghost" id="themeBtn" type="button">◐ theme</button>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <form class="action" id="runForm">
+        <label for="prIn">Run PR review</label>
+        <input id="prIn" type="text" inputmode="numeric" placeholder="PR #" />
+        <button type="submit">Dispatch</button>
+      </form>
+      <form class="action devin" id="remForm">
+        <label for="issueIn">Remediate issue</label>
+        <input id="issueIn" type="text" inputmode="numeric" placeholder="# " />
+        <button type="submit">Remediate</button>
+      </form>
+      <span class="spacer"></span>
+      <a class="btn ghost" href="how-it-works.html">How the loop works ↗</a>
+    </div>
+  </header>
+
+  <!-- ===== SUMMARY TILES ===== -->
+  <section id="summary">
+    <div class="sec-head">
+      <span class="eyebrow">Program posture</span>
+      <h2>Is the loop working?</h2>
+      <p>The one-glance answer a VP of Engineering or ISSO signs off on — remediation throughput, gate coverage, and time-to-close.</p>
+    </div>
     <div class="tiles" id="tiles"></div>
   </section>
 
-  <section class="panel">
-    <h2>Devin instances · PRs in flight</h2>
-    <table id="reviews"><thead><tr><th>PR</th><th>Session</th><th>Phase</th><th>Check</th><th>Proxy CI</th><th>Plan / insight</th></tr></thead><tbody></tbody></table>
+  <!-- ===== ISSUE REMEDIATION TRACK ===== -->
+  <section id="remediation">
+    <div class="sec-head">
+      <span class="eyebrow">Autonomous remediation</span>
+      <h2>Issue remediation track</h2>
+      <p>Each labeled issue is handed to a dedicated Devin session that drives it to a merged fix. We deep-link into Devin for the session view rather than reproducing it.</p>
+    </div>
+    <div id="tasks" class="track"></div>
   </section>
 
-  <section class="panel">
-    <h2>Findings by control &amp; severity (POA&amp;M burn-down)</h2>
-    <div id="controls"></div>
+  <!-- ===== PR REVIEW GATE ===== -->
+  <section id="gate">
+    <div class="sec-head">
+      <span class="eyebrow">Required gate</span>
+      <h2>PR review gate track</h2>
+      <p>Every pull request carries a required <span class="mono">devin/compliance</span> check. Merge is blocked until Sentinel turns it green.</p>
+    </div>
+    <div id="reviews" class="track"></div>
   </section>
 
-  <section class="panel full">
-    <h2>Compliance ticket board</h2>
-    <div class="kanban" id="kanban"></div>
-  </section>
-
-  <section class="panel">
-    <h2>Talk to the Sentinel orchestrator</h2>
-    <div id="chatlog"></div>
-    <div class="row">
-      <input id="chatin" placeholder="Ask for status, or steer a session (prefix: @<session_id> …)" onkeydown="if(event.key==='Enter')send()"/>
-      <button class="primary" onclick="send()">Send</button>
+  <!-- ===== BURN-DOWN ===== -->
+  <section id="controls">
+    <div class="sec-head">
+      <span class="headline" id="findHeadline"></span>
+      <span class="eyebrow">SSP / POA&amp;M burn-down</span>
+      <h2>Findings by 800-53 control</h2>
+      <p>Open findings rolled up to their NIST control family, with a severity breakdown of the current backlog.</p>
+    </div>
+    <div class="burn">
+      <div class="bars" id="controlBars"></div>
+      <div>
+        <div class="sev-title">By severity</div>
+        <div class="sev-list" id="sevList"></div>
+      </div>
     </div>
   </section>
 
-  <section class="panel">
-    <h2>Event timeline</h2>
-    <table id="events"><thead><tr><th>When</th><th>Kind</th><th>Detail</th></tr></thead><tbody></tbody></table>
+  <!-- ===== TICKET BOARD ===== -->
+  <section id="ticketsSec">
+    <div class="sec-head">
+      <span class="eyebrow">POA&amp;M</span>
+      <h2>Ticket board</h2>
+      <p>Findings that need human judgment are filed as tracked tickets, each mapped to its control.</p>
+    </div>
+    <div class="board" id="board"></div>
   </section>
-</main>
+
+  <!-- ===== TIMELINE ===== -->
+  <section id="timelineSec">
+    <div class="sec-head">
+      <span class="eyebrow">Audit trail</span>
+      <h2>Event timeline</h2>
+      <p>Every action Sentinel and Devin take, newest first — the evidence trail for the audit.</p>
+    </div>
+    <div class="timeline" id="timeline"></div>
+  </section>
+
+  <!-- ===== CHAT ===== -->
+  <section id="chatSec">
+    <div class="sec-head">
+      <span class="eyebrow">Steer</span>
+      <h2>Ask Sentinel</h2>
+      <p>Query program status, or paste a Devin session id to steer a running session.</p>
+    </div>
+    <div class="chat-box">
+      <div class="messages" id="messages"></div>
+      <form class="chat-form" id="chatForm">
+        <input class="msg-in" id="msgIn" type="text" placeholder="Ask Sentinel — or paste a session id to steer Devin" autocomplete="off" />
+        <input class="sess-in" id="sessIn" type="text" placeholder="session_id (optional)" autocomplete="off" />
+        <button type="submit">Send</button>
+      </form>
+    </div>
+  </section>
+
+  <footer>Sentinel · Devin API integration · we don't reproduce Devin's session view — we deep-link into it.</footer>
+</div>
+
+<div id="toast"></div>
 
 <script>
-const API = location.origin;
-const SEV = ["critical","high","medium","low","info"];
-const sevColor = {critical:"#f85149",high:"#ff7b72",medium:"#d29922",low:"#58a6ff",info:"#6e7681"};
-const el = id => document.getElementById(id);
-const fmtAgo = t => { const s=Math.max(0,(Date.now()/1000)-t); return s<60?`${s|0}s`:s<3600?`${s/60|0}m`:`${s/3600|0}h`; };
-const pill = (c,txt)=>`<span class="pill ${c}">${txt||c}</span>`;
+(function () {
+  "use strict";
+  var GH = "https://github.com/";
+  var lastOkTs = 0;      // wall-clock ms of last successful poll
+  var target = "";
 
-async function load(){
-  const s = await (await fetch(API+"/api/state")).json();
-  el("target").textContent = s.target;
-  const m = s.metrics;
-  el("tiles").innerHTML = [
-    ["PR reviews", m.reviews],["Active", m.active],["Open findings", m.findings_open],
-    ["Remediated", m.findings_remediated],["MTTR", m.mttr_seconds==null?"—":(m.mttr_seconds/60).toFixed(1)+"m"]
-  ].map(([l,n])=>`<div class="tile"><div class="n">${n}</div><div class="l">${l}</div></div>`).join("");
+  var $ = function (id) { return document.getElementById(id); };
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  // paint only when content changed — avoids flicker on unchanged sections
+  function paint(el, html) { if (el.__last !== html) { el.__last = html; el.innerHTML = html; } }
 
-  el("reviews").querySelector("tbody").innerHTML = s.reviews.map(r=>{
-    const proxyCi = (r.structured&&r.structured.proxy_ci)||"—";
-    return `<tr>
-      <td><a href="https://github.com/${r.repo}/pull/${r.pr}" target="_blank">#${r.pr}</a><div class="muted mono" style="font-size:11px">${(r.title||"").slice(0,40)}</div></td>
-      <td>${r.session_url?`<a href="${r.session_url}" target="_blank" class="mono">${(r.session_id||"").slice(0,14)}</a>`:'<span class="muted">—</span>'}</td>
-      <td>${pill(r.phase||"running")}</td>
-      <td>${pill(r.check_state||"pending")}</td>
-      <td>${pill(proxyCi==="—"?"pending":proxyCi, proxyCi)}</td>
-      <td class="plan">${(r.plan||"").slice(0,180)||'<span class="muted">…</span>'}</td>
-    </tr>`;}).join("") || `<tr><td colspan=6 class="muted">No PRs yet — click <b>Run Demo</b>.</td></tr>`;
+  function rel(ts) {
+    if (!ts) return "—";
+    var d = Date.now() / 1000 - ts;
+    if (d < 0) d = 0;
+    if (d < 5) return "just now";
+    if (d < 60) return Math.round(d) + "s ago";
+    if (d < 3600) return Math.round(d / 60) + "m ago";
+    if (d < 86400) return Math.round(d / 3600) + "h ago";
+    return Math.round(d / 86400) + "d ago";
+  }
+  function mttr(s) {
+    if (s == null) return "—";
+    var m = Math.floor(s / 60), sec = Math.round(s % 60);
+    return m + "m " + sec + "s";
+  }
+  function sevClass(sev) {
+    sev = (sev || "").toLowerCase();
+    if (sev === "critical") return "crit";
+    if (sev === "high") return "high";
+    if (sev === "medium") return "med";
+    return "low";
+  }
 
-  // findings by control, stacked by severity
-  const byCtrl={};
-  s.findings.forEach(f=>{ (byCtrl[f.control]=byCtrl[f.control]||{}); byCtrl[f.control][f.severity]=(byCtrl[f.control][f.severity]||0)+1; });
-  el("controls").innerHTML = Object.keys(byCtrl).length? Object.entries(byCtrl).map(([c,sv])=>{
-    const tot=Object.values(sv).reduce((a,b)=>a+b,0);
-    const seg=SEV.filter(x=>sv[x]).map(x=>`<i style="width:${100*sv[x]/tot}%;background:${sevColor[x]}"></i>`).join("");
-    return `<div style="margin-bottom:9px"><div style="display:flex;justify-content:space-between;font-size:12px"><span class="mono">${c}</span><span class="muted">${tot}</span></div><div class="bar">${seg}</div></div>`;
-  }).join("") : `<div class="muted">No findings yet.</div>`;
+  /* -------- section renderers -------- */
+  function renderTiles(m) {
+    var issuesDone = m.issues_remediated === m.issues_total && m.issues_total > 0;
+    var t = [
+      { cls: issuesDone ? "ok" : (m.issues_open > 0 ? "warn" : "accent"),
+        label: "Issues remediated",
+        val: '<span class="num">' + m.issues_remediated + '</span><span class="of num"> / ' + m.issues_total + '</span>',
+        note: m.issues_open + " open" },
+      { cls: "accent", label: "PRs gated",
+        val: '<span class="num">' + m.reviews + '</span>',
+        note: "required check enforced" },
+      { cls: m.findings_open > 0 ? "warn" : "ok", label: "Findings remediated",
+        val: '<span class="num">' + m.findings_remediated + '</span><span class="of num"> / ' + (m.findings_remediated + m.findings_open) + '</span>',
+        note: m.findings_open + " still open" },
+      { cls: m.active > 0 ? "devin" : "accent", label: "Active Devin sessions",
+        val: '<span class="num">' + m.active + '</span>',
+        note: m.active > 0 ? "working now" : "idle" },
+      { cls: "accent", label: "Mean time to remediate",
+        val: '<span class="num">' + mttr(m.mttr_seconds) + '</span>',
+        note: "per closed finding" }
+    ];
+    paint($("tiles"), t.map(function (x) {
+      return '<div class="tile ' + x.cls + '"><div class="label">' + x.label + '</div>' +
+             '<div class="val">' + x.val + '</div><div class="note">' + esc(x.note) + '</div></div>';
+    }).join(""));
+  }
 
-  // kanban from tickets
-  const cols={open:"Open","in remediation":"In Remediation",remediated:"Remediated","accepted-risk":"Accepted-Risk"};
-  el("kanban").innerHTML = Object.entries(cols).map(([k,label])=>{
-    const cards = s.tickets.filter(t=>(t.status||"open").toLowerCase().includes(k.split(" ")[0])).map(t=>
-      `<div class="card"><div>${t.title}</div><div class="c">${t.id} · ${pill("","")} <span class="sev-${t.severity}">${t.severity}</span> · ${t.control}</div></div>`).join("");
-    return `<div class="col"><h3>${label}</h3>${cards||'<div class="muted" style="font-size:12px">—</div>'}</div>`;
-  }).join("");
+  function renderTasks(tasks) {
+    if (!tasks || !tasks.length) {
+      paint($("tasks"), '<div class="empty">No remediation tasks yet — label an issue <code>sentinel:remediate</code>.</div>');
+      return;
+    }
+    paint($("tasks"), tasks.map(function (t) {
+      var closed = t.phase === "resolved" || t.phase === "closed" || t.resolved != null;
+      var pdot = t.phase === "running" ? "run" : (closed ? "ok" : "done");
+      var prTxt = t.pr_number != null ? "PR #" + t.pr_number : "PR …";
+      var flow =
+        '<span class="node">issue #' + t.issue + '</span>' +
+        '<span class="arrow">→</span>' +
+        '<span class="node devin"><span class="pdot ' + pdot + '"></span>Devin · ' + esc(t.phase) + '</span>' +
+        '<span class="arrow">→</span>' +
+        '<span class="node ' + (t.pr_number != null ? "" : "pending") + '">' + prTxt + '</span>' +
+        '<span class="arrow">→</span>' +
+        '<span class="node ' + (closed ? "done" : "pending") + '">' + (closed ? "closed ✓" : "open") + '</span>';
+      var chips = "";
+      if (t.control) chips += '<span class="ctrl-chip">' + esc(t.control) + '</span>';
+      if (t.severity) chips += '<span class="pill ' + sevClass(t.severity) + '">' + esc(t.severity) + '</span>';
+      var links = '<a href="' + esc(t.session_url) + '" target="_blank" rel="noopener">session ↗</a>';
+      if (t.pr_number != null) links += '<a href="' + GH + esc(target) + '/pull/' + t.pr_number + '" target="_blank" rel="noopener">PR #' + t.pr_number + ' ↗</a>';
+      return '<div class="row devin-edge"><div class="flow-scroll"><div class="flow">' + flow + '</div></div>' +
+             '<div class="row-meta">' + chips +
+             '<span class="row-title">' + esc(t.title) + '</span>' +
+             '<span class="row-links">' + links + '</span></div></div>';
+    }).join(""));
+  }
 
-  el("events").querySelector("tbody").innerHTML = s.events.slice(0,12).map(e=>
-    `<tr><td class="muted mono">${fmtAgo(e.ts)}</td><td class="mono">${e.kind}</td><td>${e.detail}</td></tr>`).join("");
+  function renderReviews(reviews) {
+    if (!reviews || !reviews.length) {
+      paint($("reviews"), '<div class="empty">No pull requests under review — open a PR to trigger the gate.</div>');
+      return;
+    }
+    paint($("reviews"), reviews.map(function (r) {
+      var g = r.check_state === "success" ? ["ok", "success"]
+            : r.check_state === "failure" ? ["crit", "failure"]
+            : ["warn", "awaiting"];
+      var flow =
+        '<span class="node">PR #' + r.pr + '</span>' +
+        '<span class="arrow">→</span>' +
+        '<span class="node devin"><span class="pdot ' + (r.phase === "running" ? "run" : "done") + '"></span>Devin · ' + esc(r.phase) + '</span>' +
+        '<span class="arrow">→</span>' +
+        '<span class="node">gate</span>' +
+        '<span class="pill ' + g[0] + '">' + g[1] + '</span>';
+      var links = '<a href="' + esc(r.session_url) + '" target="_blank" rel="noopener">session ↗</a>' +
+                  '<a href="' + GH + esc(target) + '/pull/' + r.pr + '" target="_blank" rel="noopener">PR #' + r.pr + ' ↗</a>';
+      if (r.proxy_pr != null) links += '<a href="' + GH + esc(target) + '/pull/' + r.proxy_pr + '" target="_blank" rel="noopener">proxy #' + r.proxy_pr + ' ↗</a>';
+      return '<div class="row"><div class="flow-scroll"><div class="flow">' + flow + '</div></div>' +
+             '<div class="row-meta"><span class="row-title">' + esc(r.title) +
+             ' <span class="mono" style="color:var(--muted);font-size:12px">' + esc(r.head_branch) + ' → ' + esc(r.base_branch) + '</span></span>' +
+             '<span class="row-links">' + links + '</span></div></div>';
+    }).join(""));
+  }
 
-  el("chatlog").innerHTML = s.chat.map(c=>`<div class="msg ${c.role}"><span class="who">${c.role}</span> ${c.content}</div>`).join("");
-  el("chatlog").scrollTop = 1e9;
-  el("ghmode").textContent = "";
-}
+  function renderBurn(m) {
+    var bc = m.by_control || {};
+    var keys = Object.keys(bc).sort(function (a, b) { return bc[b] - bc[a]; });
+    var max = keys.reduce(function (mx, k) { return Math.max(mx, bc[k]); }, 1);
+    paint($("controlBars"), keys.length ? keys.map(function (k) {
+      var w = Math.max(3, (bc[k] / max) * 100);
+      return '<div class="bar-row"><div class="bar-label" title="' + esc(k) + '">' + esc(k) + '</div>' +
+             '<div class="bar-track"><div class="bar-fill" style="width:' + w + '%"></div></div>' +
+             '<div class="bar-count num">' + bc[k] + '</div></div>';
+    }).join("") : '<div class="empty">No open findings.</div>');
 
-async function runDemo(){
-  const pr = prompt("PR number to review (blank = synthetic demo):","");
-  const body = pr? {pr:parseInt(pr)} : {};
-  await fetch(API+"/api/demo/run",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});
-  setTimeout(load,600);
-}
-async function send(){
-  const inp=el("chatin"); const raw=inp.value.trim(); if(!raw) return; inp.value="";
-  let body={message:raw};
-  const m=raw.match(/^@(\S+)\s+([\s\S]+)/); if(m){ body={session_id:m[1],message:m[2]}; }
-  await fetch(API+"/api/chat",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});
-  load();
-}
-load(); setInterval(load, 5000);
+    var bs = m.by_severity || {};
+    var order = ["critical", "high", "medium", "low"];
+    var smax = order.reduce(function (mx, k) { return Math.max(mx, bs[k] || 0); }, 1);
+    var color = { critical: "var(--crit)", high: "var(--crit)", medium: "var(--warn)", low: "var(--muted)" };
+    paint($("sevList"), order.filter(function (k) { return bs[k]; }).map(function (k) {
+      var w = ((bs[k] || 0) / smax) * 100;
+      return '<div class="sev-row"><span class="cap">' + k + '</span>' +
+             '<span class="sev-bar"><span style="width:' + w + '%;background:' + color[k] + '"></span></span>' +
+             '<span class="n num">' + bs[k] + '</span></div>';
+    }).join("") || '<div class="note mono" style="color:var(--muted)">—</div>');
+
+    paint($("findHeadline"), '<b class="num">' + m.findings_remediated + '</b> remediated / <b class="num">' +
+      (m.findings_remediated + m.findings_open) + '</b> total');
+  }
+
+  function renderTickets(tickets) {
+    if (!tickets || !tickets.length) {
+      paint($("board"), '<div class="empty" style="flex:1">No open tickets.</div>');
+      return;
+    }
+    var groups = {}, order = [];
+    tickets.forEach(function (t) {
+      var s = t.status || "open";
+      if (!groups[s]) { groups[s] = []; order.push(s); }
+      groups[s].push(t);
+    });
+    paint($("board"), order.map(function (s) {
+      var cards = groups[s].map(function (t) {
+        return '<div class="tcard"><div class="tid">' + esc(t.id) +
+               (t.link ? ' · <a href="' + esc(t.link) + '" target="_blank" rel="noopener">view ↗</a>' : "") +
+               '</div><div class="ttl">' + esc(t.title) + '</div>' +
+               '<div class="trow"><span class="ctrl-chip">' + esc(t.control) + '</span>' +
+               '<span class="pill ' + sevClass(t.severity) + '">' + esc(t.severity) + '</span></div></div>';
+      }).join("");
+      return '<div class="col"><h4>' + esc(s) + ' <span class="cnt num">' + groups[s].length + '</span></h4>' + cards + '</div>';
+    }).join(""));
+  }
+
+  var KIND = { remediate: "var(--devin)", reviewed: "var(--accent)", proxy: "var(--accent)",
+               ticket: "var(--warn)", attach: "var(--gh)", head: "var(--gh)",
+               skip: "var(--muted)", startup: "var(--muted)" };
+  function renderEvents(events) {
+    if (!events || !events.length) {
+      paint($("timeline"), '<div class="empty" style="border:none">No events yet.</div>');
+      return;
+    }
+    paint($("timeline"), events.slice(0, 30).map(function (e) {
+      var c = KIND[e.kind] || "var(--muted)";
+      return '<div class="ev"><span class="k" style="background:' + c + '"></span>' +
+             '<span class="txt"><span class="kind" style="color:' + c + '">' + esc(e.kind) + '</span>' + esc(e.detail) + '</span>' +
+             '<span class="when">' + rel(e.ts) + '</span></div>';
+    }).join(""));
+  }
+
+  function renderChat(chat) {
+    var el = $("messages");
+    var nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+    var html = (chat && chat.length) ? chat.map(function (c) {
+      var who = c.role === "user" ? "user" : "sentinel";
+      return '<div class="msg ' + who + '"><span class="meta">' + (who === "user" ? "you" : "sentinel") + '</span>' +
+             esc(c.content) + '</div>';
+    }).join("") : '<div class="note mono" style="color:var(--muted)">No messages yet — say hello.</div>';
+    if (el.__last !== html) {
+      el.__last = html; el.innerHTML = html;
+      if (nearBottom) el.scrollTop = el.scrollHeight;
+    }
+  }
+
+  /* -------- polling -------- */
+  function setLive(ok) {
+    $("live").className = "live " + (ok ? "up" : "down");
+    updateAgo();
+  }
+  function updateAgo() {
+    var el = $("live");
+    if (!lastOkTs) { $("liveText").textContent = "connecting…"; return; }
+    var secs = Math.max(0, Math.round((Date.now() - lastOkTs) / 1000));
+    var ago = secs < 2 ? "just now" : secs + "s ago";
+    $("liveText").textContent = el.classList.contains("down")
+      ? "connection lost · last " + ago : "live · updated " + ago;
+  }
+
+  function render(s) {
+    target = s.target || "";
+    $("target").textContent = target || "—";
+    renderTiles(s.metrics || {});
+    renderTasks(s.tasks);
+    renderReviews(s.reviews);
+    renderBurn(s.metrics || {});
+    renderTickets(s.tickets);
+    renderEvents(s.events);
+    renderChat(s.chat);
+  }
+
+  function poll() {
+    return fetch("/api/state", { cache: "no-store" })
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function (s) { render(s); lastOkTs = Date.now(); setLive(true); })
+      .catch(function () { setLive(false); });  // keep last render; flip dot red
+  }
+
+  /* -------- actions -------- */
+  function toast(title, body, isErr) {
+    var t = document.createElement("div");
+    t.className = "toast" + (isErr ? " err" : "");
+    t.innerHTML = '<div class="t-h">' + esc(title) + '</div>' + (body ? '<div class="t-b">' + esc(body) + '</div>' : "");
+    $("toast").appendChild(t);
+    setTimeout(function () { t.style.opacity = "0"; t.style.transition = "opacity .4s"; setTimeout(function () { t.remove(); }, 400); }, 6000);
+  }
+  function postJSON(url, body) {
+    return fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) {
+        if (!r.ok) throw new Error(j && j.error ? j.error : "HTTP " + r.status);
+        return j; }); });
+  }
+
+  $("runForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var pr = parseInt($("prIn").value, 10);
+    if (!pr) { toast("Enter a PR number", "", true); return; }
+    postJSON("/api/demo/run", { pr: pr }).then(function (j) {
+      toast("PR #" + pr + " review dispatched", j.session_id || j.id || "queued");
+      $("prIn").value = ""; poll();
+    }).catch(function (err) { toast("Dispatch failed", err.message, true); });
+  });
+  $("remForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var issue = parseInt($("issueIn").value, 10);
+    if (!issue) { toast("Enter an issue number", "", true); return; }
+    postJSON("/api/demo/remediate", { issue: issue }).then(function (j) {
+      toast("Issue #" + issue + " remediation started", j.session_id || j.id || "queued");
+      $("issueIn").value = ""; poll();
+    }).catch(function (err) { toast("Remediate failed", err.message, true); });
+  });
+  $("chatForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var msg = $("msgIn").value.trim();
+    if (!msg) return;
+    var sess = $("sessIn").value.trim();
+    var body = { message: msg };
+    if (sess) body.session_id = sess;
+    $("msgIn").value = "";
+    postJSON("/api/chat", body).then(function () { poll(); })
+      .catch(function (err) { toast("Send failed", err.message, true); });
+  });
+
+  /* -------- theme toggle -------- */
+  $("themeBtn").addEventListener("click", function () {
+    var cur = document.documentElement.getAttribute("data-theme");
+    var dark = cur ? cur === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
+    var next = dark ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    try { localStorage.setItem("sentinel-theme", next); } catch (_) {}
+  });
+  try {
+    var saved = localStorage.getItem("sentinel-theme");
+    if (saved) document.documentElement.setAttribute("data-theme", saved);
+  } catch (_) {}
+
+  /* -------- loop -------- */
+  poll();
+  setInterval(poll, 5000);
+  setInterval(updateAgo, 1000);
+})();
 </script>
 </body>
 </html>
