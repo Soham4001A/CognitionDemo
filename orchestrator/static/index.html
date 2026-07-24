@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Sentinel — compliance control plane</title>
+<title>Sentinel — live</title>
 <style>
   :root {
     --bg: #f4f7fa; --surface: #ffffff; --surface-2: #eef2f7; --line: #d9e1ea;
@@ -71,9 +71,11 @@
   }
   .mark svg { width: 24px; height: 24px; }
   .brandtext { flex: 1; min-width: 240px; }
-  .brandtext h1 { font-size: 27px; letter-spacing: -.02em; margin: 2px 0 3px; font-weight: 720; }
-  .brandtext .sub { font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); }
+  .brandtext h1 { font-size: 27px; letter-spacing: -.02em; margin: 2px 0 4px; font-weight: 720; }
+  .brandtext .sub { font-size: 14.5px; color: var(--muted); max-width: 66ch; }
   .brandtext .sub b { color: var(--text); font-weight: 600; }
+  .brandtext .sub code { font-family: var(--font-mono); font-size: 12.5px; background: var(--surface-2);
+                         border: 1px solid var(--line); border-radius: 5px; padding: .06em .4em; color: var(--text); }
   .head-right { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
   .live { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 12.5px;
           padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); }
@@ -83,22 +85,36 @@
   .live.down { background: var(--crit-soft); border-color: transparent; color: var(--crit); }
   .live.down .dot { background: var(--crit); }
 
-  /* ---------- toolbar ---------- */
-  .toolbar { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; align-items: center; }
+  /* ---------- narration ---------- */
+  .narration { margin-top: 20px; padding: 15px 18px; background: var(--surface);
+               border: 1px solid var(--line); border-left: 3px solid var(--devin); border-radius: 12px;
+               box-shadow: var(--shadow); font-size: 16.5px; letter-spacing: -.005em; }
+  .narration b { font-weight: 700; }
+
+  /* ---------- demo control ---------- */
+  .control { margin-top: 16px; padding: 14px 16px; background: var(--surface-2);
+             border: 1px solid var(--line); border-radius: 13px; }
+  .control-head { font-family: var(--font-mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase;
+                  color: var(--muted); font-weight: 600; margin-bottom: 11px; display: flex; align-items: center; gap: 8px; }
+  .control-head .dot { background: var(--crit); }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
   .action { display: inline-flex; align-items: center; gap: 0; border: 1px solid var(--line);
             border-radius: 10px; overflow: hidden; background: var(--surface); }
   .action label { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
                   color: var(--muted); padding: 0 4px 0 11px; }
-  .action input { width: 62px; border: none; background: transparent; color: var(--text);
+  .action input { width: 58px; border: none; background: transparent; color: var(--text);
                   font-family: var(--font-mono); font-size: 13px; padding: 8px 6px; }
   .action input:focus { outline: none; }
   .action button, .btn {
     font-family: var(--font-mono); font-size: 12.5px; font-weight: 600; cursor: pointer;
     border: none; padding: 9px 13px; color: #fff; background: var(--accent-2);
-    transition: filter .15s ease;
+    transition: filter .15s ease; border-radius: 10px;
   }
+  .action button { border-radius: 0; }
   .action button:hover, .btn:hover { filter: brightness(1.08); }
-  .btn.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); border-radius: 10px; }
+  .btn.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+  .btn.devin { background: var(--devin); }
+  .btn.danger { background: transparent; color: var(--crit); border: 1px solid color-mix(in srgb, var(--crit) 45%, var(--line)); }
   .action.devin button { background: var(--devin); }
   .spacer { flex: 1; }
 
@@ -108,50 +124,56 @@
   .sec-head { margin-bottom: 20px; }
   .sec-head .eyebrow { display: block; margin-bottom: 6px; }
   .sec-head h2 { font-size: 21px; letter-spacing: -.01em; margin: 0; }
-  .sec-head p { color: var(--muted); font-size: 14.5px; max-width: 64ch; margin: 5px 0 0; }
+  .sec-head p { color: var(--muted); font-size: 14.5px; max-width: 70ch; margin: 5px 0 0; }
   .sec-head .headline { float: right; font-family: var(--font-mono); font-size: 13px; color: var(--muted); }
   .sec-head .headline b { color: var(--text); }
-
-  /* ---------- tiles ---------- */
-  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(178px, 1fr)); gap: 14px; }
-  .tile { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 17px 18px;
-          box-shadow: var(--shadow); }
-  .tile .label { font-family: var(--font-mono); font-size: 11px; letter-spacing: .09em; text-transform: uppercase;
-                 color: var(--muted); font-weight: 600; }
-  .tile .val { font-size: 36px; font-weight: 720; letter-spacing: -.03em; line-height: 1.05; margin-top: 10px; }
-  .tile .val .of { font-size: 18px; font-weight: 600; color: var(--muted); letter-spacing: 0; }
-  .tile .note { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); margin-top: 5px; }
-  .tile.ok .val { color: var(--ok); } .tile.ok { border-top: 3px solid var(--ok); }
-  .tile.warn .val { color: var(--warn); } .tile.warn { border-top: 3px solid var(--warn); }
-  .tile.devin .val { color: var(--devin); } .tile.devin { border-top: 3px solid var(--devin); }
-  .tile.accent .val { color: var(--accent-2); } .tile.accent { border-top: 3px solid var(--accent); }
+  .framing { font-size: 14.5px; color: var(--muted); max-width: 72ch; margin: 0 0 20px;
+             padding-left: 12px; border-left: 2px solid var(--devin); }
+  .framing b { color: var(--text); font-weight: 640; }
 
   /* ---------- track rows ---------- */
-  .track { display: flex; flex-direction: column; gap: 11px; }
-  .row { background: var(--surface); border: 1px solid var(--line); border-radius: 13px; padding: 14px 16px;
+  .track { display: flex; flex-direction: column; gap: 12px; }
+  .row { background: var(--surface); border: 1px solid var(--line); border-radius: 13px; padding: 15px 16px;
          box-shadow: var(--shadow); }
   .row.devin-edge { border-left: 3px solid var(--devin); }
   .flow-scroll { overflow-x: auto; }
   .flow { display: flex; align-items: center; gap: 9px; font-family: var(--font-mono); font-size: 12.5px;
           width: max-content; }
-  .node { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 8px;
+  a.node, .node { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 8px;
           border: 1px solid var(--line); background: var(--surface-2); white-space: nowrap; color: var(--text); }
+  a.node:hover { text-decoration: none; filter: brightness(1.03); border-color: var(--accent); }
   .node.devin { border-color: color-mix(in srgb, var(--devin) 40%, var(--line)); color: var(--devin); }
   .node.done { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, var(--line)); }
   .node.pending { color: var(--muted); }
+  .node .ttl { max-width: 46ch; overflow: hidden; text-overflow: ellipsis; }
   .arrow { color: var(--muted); }
   .pdot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
   .pdot.run { background: var(--warn); } .pdot.done { background: var(--accent); }
   .pdot.ok { background: var(--ok); }
   .row-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; margin-top: 12px; }
-  .row-title { flex: 1; min-width: 120px; font-size: 14px; color: var(--text); white-space: nowrap;
-               overflow: hidden; text-overflow: ellipsis; }
-  .row-links { display: inline-flex; gap: 12px; font-family: var(--font-mono); font-size: 12px; }
+  .row-links { display: inline-flex; gap: 12px; font-family: var(--font-mono); font-size: 12px; margin-left: auto; }
+
+  /* ---------- Devin's own words ---------- */
+  .words { margin-top: 13px; display: flex; flex-direction: column; gap: 9px; }
+  .dq { background: var(--surface-2); border-left: 2px solid var(--devin); border-radius: 0 8px 8px 0;
+        padding: 9px 12px; }
+  .dq .dq-label { display: block; font-family: var(--font-mono); font-size: 10px; letter-spacing: .1em;
+                  text-transform: uppercase; color: var(--devin); font-weight: 700; margin-bottom: 4px; }
+  .dq .dq-body { font-size: 13.5px; color: var(--text); line-height: 1.5; white-space: pre-wrap;
+                 word-break: break-word; }
+  details.dq > summary { cursor: pointer; list-style: none; }
+  details.dq > summary::-webkit-details-marker { display: none; }
+  details.dq[open] > summary .clip { display: none; }
+  details.dq:not([open]) > summary .full { display: none; }
+  details.dq .more { color: var(--accent-2); font-style: normal; }
 
   /* ---------- chips / pills ---------- */
   .ctrl-chip { font-family: var(--font-mono); font-size: 11.5px; font-weight: 600; padding: 3px 8px;
                border-radius: 6px; background: var(--surface-2); border: 1px solid var(--line); color: var(--muted);
                white-space: nowrap; }
+  .out-chip { font-family: var(--font-mono); font-size: 11.5px; font-weight: 600; padding: 3px 8px;
+              border-radius: 6px; background: var(--devin-soft); border: 1px solid color-mix(in srgb, var(--devin) 34%, var(--line));
+              color: var(--devin); white-space: nowrap; }
   .pill { font-family: var(--font-mono); font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px;
           white-space: nowrap; letter-spacing: .02em; text-transform: uppercase; }
   .pill.crit { background: var(--crit-soft); color: var(--crit); }
@@ -238,6 +260,7 @@
            border-radius: 11px; padding: 12px 15px; box-shadow: var(--shadow); max-width: 340px;
            font-size: 13.5px; animation: rise .25s ease; }
   .toast.err { border-left-color: var(--crit); }
+  .toast.devin { border-left-color: var(--devin); }
   .toast .t-h { font-weight: 640; margin-bottom: 3px; }
   .toast .t-b { font-family: var(--font-mono); font-size: 12px; color: var(--muted); word-break: break-all; }
   @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
@@ -248,6 +271,7 @@
     .burn { grid-template-columns: 1fr; gap: 26px; }
     .head-right { align-items: flex-start; }
     .sec-head .headline { float: none; display: block; margin-top: 6px; }
+    .node .ttl { max-width: 30ch; }
   }
   @media (prefers-reduced-motion: no-preference) {
     .pdot.run { animation: pulse 1.6s ease-in-out infinite; }
@@ -269,9 +293,9 @@
         </svg>
       </div>
       <div class="brandtext">
-        <span class="eyebrow">compliance control plane · Devin API</span>
+        <span class="eyebrow">Devin API</span>
         <h1>Sentinel</h1>
-        <div class="sub">target repo · <b id="target">—</b></div>
+        <div class="sub">Devin, wired into <b><code id="target">—</code></b>'s events — it fixes filed issues and gates every pull request.</div>
       </div>
       <div class="head-right">
         <span class="live" id="live"><span class="dot"></span><span id="liveText">connecting…</span></span>
@@ -279,59 +303,58 @@
       </div>
     </div>
 
-    <div class="toolbar">
-      <form class="action" id="runForm">
-        <label for="prIn">Run PR review</label>
-        <input id="prIn" type="text" inputmode="numeric" placeholder="PR #" />
-        <button type="submit">Dispatch</button>
-      </form>
-      <form class="action devin" id="remForm">
-        <label for="issueIn">Remediate issue</label>
-        <input id="issueIn" type="text" inputmode="numeric" placeholder="# " />
-        <button type="submit">Remediate</button>
-      </form>
-      <span class="spacer"></span>
-      <a class="btn ghost" href="how-it-works.html">How the loop works ↗</a>
+    <!-- live narration -->
+    <div class="narration" id="narration">Connecting to the orchestrator…</div>
+
+    <!-- demo control -->
+    <div class="control">
+      <div class="control-head"><span class="dot"></span>Demo control · operated live</div>
+      <div class="toolbar">
+        <button class="btn danger" id="resetBtn" type="button">Reset demo</button>
+        <button class="btn ghost" id="seedBtn" type="button">Seed issues</button>
+        <form class="action devin" id="remForm">
+          <label for="issueIn">Remediate issue</label>
+          <input id="issueIn" type="text" inputmode="numeric" placeholder="#" />
+          <button type="submit">Remediate</button>
+        </form>
+        <button class="btn" id="seedPrBtn" type="button">Open a gate PR</button>
+        <span class="spacer"></span>
+        <a class="btn ghost" href="how-it-works.html">How the loop works ↗</a>
+      </div>
     </div>
   </header>
 
-  <!-- ===== SUMMARY TILES ===== -->
-  <section id="summary">
+  <!-- ===== THE TWO LOOPS ===== -->
+  <section id="loops">
     <div class="sec-head">
-      <span class="eyebrow">Program posture</span>
-      <h2>Is the loop working?</h2>
-      <p>The one-glance answer a VP of Engineering or ISSO signs off on — remediation throughput, gate coverage, and time-to-close.</p>
+      <span class="eyebrow">The two loops</span>
+      <h2>Issues Devin fixed, and pull requests Devin gated</h2>
     </div>
-    <div class="tiles" id="tiles"></div>
-  </section>
+    <p class="framing">Everything below is work <b>Devin</b> did on its own: it read the issue, decided the fix,
+      opened a reviewable PR, and left the scanner proof. The orchestrator only routed the events.</p>
 
-  <!-- ===== ISSUE REMEDIATION TRACK ===== -->
-  <section id="remediation">
-    <div class="sec-head">
-      <span class="eyebrow">Autonomous remediation</span>
-      <h2>Issue remediation track</h2>
-      <p>Each labeled issue is handed to a dedicated Devin session that drives it to a merged fix. We deep-link into Devin for the session view rather than reproducing it.</p>
+    <!-- A) issues fixed -->
+    <div class="sec-head" style="margin:26px 0 14px">
+      <span class="eyebrow">A · Issues Devin fixed</span>
+      <h2>From an ambiguous issue to a specific, reasoned fix</h2>
     </div>
     <div id="tasks" class="track"></div>
-  </section>
 
-  <!-- ===== PR REVIEW GATE ===== -->
-  <section id="gate">
-    <div class="sec-head">
-      <span class="eyebrow">Required gate</span>
-      <h2>PR review gate track</h2>
-      <p>Every pull request carries a required <span class="mono">devin/compliance</span> check. Merge is blocked until Sentinel turns it green.</p>
+    <!-- B) PRs gated -->
+    <div class="sec-head" style="margin:32px 0 14px">
+      <span class="eyebrow">B · Pull requests Devin gated</span>
+      <h2>A required check that stays red until the fix is in</h2>
     </div>
     <div id="reviews" class="track"></div>
   </section>
 
-  <!-- ===== BURN-DOWN ===== -->
-  <section id="controls">
+  <!-- ===== EVIDENCE DEVIN PRODUCED ===== -->
+  <section id="evidence">
     <div class="sec-head">
       <span class="headline" id="findHeadline"></span>
-      <span class="eyebrow">SSP / POA&amp;M burn-down</span>
-      <h2>Findings by 800-53 control</h2>
-      <p>Open findings rolled up to their NIST control family, with a severity breakdown of the current backlog.</p>
+      <span class="eyebrow">Evidence Devin produced</span>
+      <h2>Findings mapped to 800-53 controls</h2>
+      <p>Every finding Devin raised, rolled up to its NIST control family, with the severity mix of what's still open.</p>
     </div>
     <div class="burn">
       <div class="bars" id="controlBars"></div>
@@ -342,22 +365,22 @@
     </div>
   </section>
 
-  <!-- ===== TICKET BOARD ===== -->
+  <!-- ===== TICKETS / POA&M ===== -->
   <section id="ticketsSec">
     <div class="sec-head">
-      <span class="eyebrow">POA&amp;M</span>
-      <h2>Ticket board</h2>
-      <p>Findings that need human judgment are filed as tracked tickets, each mapped to its control.</p>
+      <span class="eyebrow">Tickets · POA&amp;M</span>
+      <h2>What Devin flagged for a human to decide</h2>
+      <p>Findings that need judgment become tracked tickets, each mapped to its control.</p>
     </div>
     <div class="board" id="board"></div>
   </section>
 
-  <!-- ===== TIMELINE ===== -->
+  <!-- ===== ACTIVITY ===== -->
   <section id="timelineSec">
     <div class="sec-head">
-      <span class="eyebrow">Audit trail</span>
-      <h2>Event timeline</h2>
-      <p>Every action Sentinel and Devin take, newest first — the evidence trail for the audit.</p>
+      <span class="eyebrow">Activity</span>
+      <h2>The audit trail</h2>
+      <p>Every action Sentinel and Devin took, newest first.</p>
     </div>
     <div class="timeline" id="timeline"></div>
   </section>
@@ -365,14 +388,14 @@
   <!-- ===== CHAT ===== -->
   <section id="chatSec">
     <div class="sec-head">
-      <span class="eyebrow">Steer</span>
-      <h2>Ask Sentinel</h2>
-      <p>Query program status, or paste a Devin session id to steer a running session.</p>
+      <span class="eyebrow">Ask Sentinel</span>
+      <h2>Query status, or steer a running session</h2>
+      <p>Ask about program state, or paste a Devin session id to steer a live run.</p>
     </div>
     <div class="chat-box">
       <div class="messages" id="messages"></div>
       <form class="chat-form" id="chatForm">
-        <input class="msg-in" id="msgIn" type="text" placeholder="Ask Sentinel — or paste a session id to steer Devin" autocomplete="off" />
+        <input class="msg-in" id="msgIn" type="text" placeholder="Ask Sentinel — or type &quot;review PR 12&quot; to attach Devin" autocomplete="off" />
         <input class="sess-in" id="sessIn" type="text" placeholder="session_id (optional)" autocomplete="off" />
         <button type="submit">Send</button>
       </form>
@@ -410,6 +433,16 @@
     if (d < 86400) return Math.round(d / 3600) + "h ago";
     return Math.round(d / 86400) + "d ago";
   }
+  function dur(from, to) {
+    if (!from) return "";
+    var end = (to != null ? to : Date.now() / 1000);
+    var d = end - from; if (d < 0) d = 0;
+    var m = Math.floor(d / 60), sec = Math.round(d % 60);
+    if (d < 60) return sec + "s";
+    if (d < 3600) return m + "m " + sec + "s";
+    var h = Math.floor(d / 3600);
+    return h + "h " + Math.floor((d % 3600) / 60) + "m";
+  }
   function mttr(s) {
     if (s == null) return "—";
     var m = Math.floor(s / 60), sec = Math.round(s % 60);
@@ -422,89 +455,135 @@
     if (sev === "medium") return "med";
     return "low";
   }
+  function ghIssue(n) { return GH + esc(target) + "/issues/" + n; }
+  function ghPull(n) { return GH + esc(target) + "/pull/" + n; }
 
-  /* -------- section renderers -------- */
-  function renderTiles(m) {
-    var issuesDone = m.issues_remediated === m.issues_total && m.issues_total > 0;
-    var t = [
-      { cls: issuesDone ? "ok" : (m.issues_open > 0 ? "warn" : "accent"),
-        label: "Issues remediated",
-        val: '<span class="num">' + m.issues_remediated + '</span><span class="of num"> / ' + m.issues_total + '</span>',
-        note: m.issues_open + " open" },
-      { cls: "accent", label: "PRs gated",
-        val: '<span class="num">' + m.reviews + '</span>',
-        note: "required check enforced" },
-      { cls: m.findings_open > 0 ? "warn" : "ok", label: "Findings remediated",
-        val: '<span class="num">' + m.findings_remediated + '</span><span class="of num"> / ' + (m.findings_remediated + m.findings_open) + '</span>',
-        note: m.findings_open + " still open" },
-      { cls: m.active > 0 ? "devin" : "accent", label: "Active Devin sessions",
-        val: '<span class="num">' + m.active + '</span>',
-        note: m.active > 0 ? "working now" : "idle" },
-      { cls: "accent", label: "Mean time to remediate",
-        val: '<span class="num">' + mttr(m.mttr_seconds) + '</span>',
-        note: "per closed finding" }
-    ];
-    paint($("tiles"), t.map(function (x) {
-      return '<div class="tile ' + x.cls + '"><div class="label">' + x.label + '</div>' +
-             '<div class="val">' + x.val + '</div><div class="note">' + esc(x.note) + '</div></div>';
-    }).join(""));
+  /* -------- live narration -------- */
+  function renderNarration(s) {
+    var tasks = s.tasks || [], reviews = s.reviews || [], m = s.metrics || {};
+    var fixing = tasks.filter(function (t) { return t.phase === "running"; }).length;
+    var remediated = m.issues_remediated || 0;
+    var gating = reviews.length;
+    var parts = [];
+    if (fixing) parts.push("<b class='num'>" + fixing + "</b> issue" + (fixing === 1 ? "" : "s") + " right now");
+    if (remediated) parts.push("has already closed <b class='num'>" + remediated + "</b>");
+    if (gating) parts.push("is gating <b class='num'>" + gating + "</b> pull request" + (gating === 1 ? "" : "s"));
+    var html;
+    if (!parts.length) {
+      html = "Sentinel is idle — no issues in flight and no PRs under review. Use <b>Demo control</b> to start one.";
+    } else {
+      // build a natural sentence
+      if (fixing) {
+        html = "Devin is fixing " + parts[0];
+        var rest = parts.slice(1);
+        if (rest.length === 1) html += ", and " + rest[0];
+        else if (rest.length === 2) html += ", " + rest[0] + ", and " + rest[1];
+        html += ".";
+      } else {
+        html = "Devin " + parts.join(", and ") + ".";
+      }
+    }
+    paint($("narration"), html);
   }
 
+  /* -------- A) issues Devin fixed -------- */
   function renderTasks(tasks) {
     if (!tasks || !tasks.length) {
-      paint($("tasks"), '<div class="empty">No remediation tasks yet — label an issue <code>sentinel:remediate</code>.</div>');
+      paint($("tasks"), '<div class="empty">No issues in flight. Use <b>Demo control → Remediate an issue</b>, ' +
+        'or label any issue <code>sentinel:remediate</code>, and Devin\'s fix will appear here.</div>');
       return;
     }
     paint($("tasks"), tasks.map(function (t) {
       var closed = t.phase === "resolved" || t.phase === "closed" || t.resolved != null;
       var pdot = t.phase === "running" ? "run" : (closed ? "ok" : "done");
-      var prTxt = t.pr_number != null ? "PR #" + t.pr_number : "PR …";
+      var elapsed = dur(t.created, t.resolved);
+      var ctrl = t.control ? ' <span class="ctrl-chip">' + esc(t.control) + '</span>' : "";
+      var prNode = t.pr_number != null
+        ? '<a class="node" href="' + ghPull(t.pr_number) + '" target="_blank" rel="noopener">PR #' + t.pr_number + '</a>'
+        : '<span class="node pending">PR …</span>';
+      var lastNode = closed
+        ? '<span class="node done">issue closed ✓</span>'
+        : '<span class="node pending">awaiting merge</span>';
       var flow =
-        '<span class="node">issue #' + t.issue + '</span>' +
+        '<a class="node" href="' + ghIssue(t.issue) + '" target="_blank" rel="noopener">issue #' + t.issue +
+          ' <span class="ttl">' + esc(t.title) + '</span></a>' + ctrl +
         '<span class="arrow">→</span>' +
-        '<span class="node devin"><span class="pdot ' + pdot + '"></span>Devin · ' + esc(t.phase) + '</span>' +
-        '<span class="arrow">→</span>' +
-        '<span class="node ' + (t.pr_number != null ? "" : "pending") + '">' + prTxt + '</span>' +
-        '<span class="arrow">→</span>' +
-        '<span class="node ' + (closed ? "done" : "pending") + '">' + (closed ? "closed ✓" : "open") + '</span>';
-      var chips = "";
-      if (t.control) chips += '<span class="ctrl-chip">' + esc(t.control) + '</span>';
-      if (t.severity) chips += '<span class="pill ' + sevClass(t.severity) + '">' + esc(t.severity) + '</span>';
-      var links = '<a href="' + esc(t.session_url) + '" target="_blank" rel="noopener">session ↗</a>';
-      if (t.pr_number != null) links += '<a href="' + GH + esc(target) + '/pull/' + t.pr_number + '" target="_blank" rel="noopener">PR #' + t.pr_number + ' ↗</a>';
+        '<a class="node devin" href="' + esc(t.session_url) + '" target="_blank" rel="noopener">' +
+          '<span class="pdot ' + pdot + '"></span>Devin · ' + esc(t.phase) +
+          (elapsed ? ' · ' + elapsed : '') + '</a>' +
+        '<span class="arrow">→</span>' + prNode +
+        '<span class="arrow">→</span>' + lastNode;
+
+      var words = "";
+      if (t.summary || t.evidence) {
+        words += '<div class="words">';
+        if (t.summary) {
+          words += '<div class="dq"><span class="dq-label">What Devin changed</span>' +
+                   '<span class="dq-body">' + esc(t.summary) + '</span></div>';
+        }
+        if (t.evidence) {
+          words += '<div class="dq"><span class="dq-label">Scanner proof · before → after</span>' +
+                   '<span class="dq-body">' + esc(t.evidence) + '</span></div>';
+        }
+        words += '</div>';
+      }
+      var sev = t.severity ? '<span class="pill ' + sevClass(t.severity) + '">' + esc(t.severity) + '</span>' : "";
+      var meta = '<div class="row-meta">' + sev +
+        '<span class="row-links"><a href="' + esc(t.session_url) + '" target="_blank" rel="noopener">Devin session ↗</a></span></div>';
+
       return '<div class="row devin-edge"><div class="flow-scroll"><div class="flow">' + flow + '</div></div>' +
-             '<div class="row-meta">' + chips +
-             '<span class="row-title">' + esc(t.title) + '</span>' +
-             '<span class="row-links">' + links + '</span></div></div>';
+             words + meta + '</div>';
     }).join(""));
   }
 
+  /* -------- B) PRs Devin gated -------- */
+  function planBlock(plan) {
+    if (!plan) return "";
+    var full = esc(plan);
+    if (plan.length <= 240) {
+      return '<div class="dq"><span class="dq-label">Devin\'s verdict</span>' +
+             '<span class="dq-body">' + full + '</span></div>';
+    }
+    var trunc = esc(plan.slice(0, 240));
+    return '<details class="dq"><summary><span class="dq-label">Devin\'s verdict</span>' +
+           '<span class="dq-body clip">' + trunc + '… <span class="more">show more</span></span>' +
+           '<span class="dq-body full">' + full + '</span></summary></details>';
+  }
   function renderReviews(reviews) {
     if (!reviews || !reviews.length) {
-      paint($("reviews"), '<div class="empty">No pull requests under review — open a PR to trigger the gate.</div>');
+      paint($("reviews"), '<div class="empty">No open PRs under review. Use <b>Demo control → Open a gate PR</b>, ' +
+        'and Devin attaches as a required reviewer here.</div>');
       return;
     }
     paint($("reviews"), reviews.map(function (r) {
-      var g = r.check_state === "success" ? ["ok", "success"]
+      var g = r.check_state === "success" ? ["ok", "cleared"]
             : r.check_state === "failure" ? ["crit", "failure"]
-            : ["warn", "awaiting"];
+            : ["warn", "awaiting approval"];
       var flow =
-        '<span class="node">PR #' + r.pr + '</span>' +
+        '<a class="node" href="' + ghPull(r.pr) + '" target="_blank" rel="noopener">PR #' + r.pr +
+          ' <span class="ttl">' + esc(r.title) + '</span></a>' +
         '<span class="arrow">→</span>' +
-        '<span class="node devin"><span class="pdot ' + (r.phase === "running" ? "run" : "done") + '"></span>Devin · ' + esc(r.phase) + '</span>' +
+        '<a class="node devin" href="' + esc(r.session_url) + '" target="_blank" rel="noopener">' +
+          '<span class="pdot ' + (r.phase === "running" ? "run" : "done") + '"></span>Devin · ' + esc(r.phase) + '</a>' +
         '<span class="arrow">→</span>' +
-        '<span class="node">gate</span>' +
+        '<span class="node">devin/compliance</span>' +
         '<span class="pill ' + g[0] + '">' + g[1] + '</span>';
-      var links = '<a href="' + esc(r.session_url) + '" target="_blank" rel="noopener">session ↗</a>' +
-                  '<a href="' + GH + esc(target) + '/pull/' + r.pr + '" target="_blank" rel="noopener">PR #' + r.pr + ' ↗</a>';
-      if (r.proxy_pr != null) links += '<a href="' + GH + esc(target) + '/pull/' + r.proxy_pr + '" target="_blank" rel="noopener">proxy #' + r.proxy_pr + ' ↗</a>';
+
+      var outs = '<span class="out-chip">docs committed</span>';
+      if (r.proxy_pr != null) {
+        outs += '<a class="out-chip" href="' + ghPull(r.proxy_pr) + '" target="_blank" rel="noopener">remediation → proxy PR #' + r.proxy_pr + ' ↗</a>';
+      }
+      var branch = '<span class="mono" style="color:var(--muted);font-size:12px">' +
+        esc(r.head_branch) + ' → ' + esc(r.base_branch) + '</span>';
+
       return '<div class="row"><div class="flow-scroll"><div class="flow">' + flow + '</div></div>' +
-             '<div class="row-meta"><span class="row-title">' + esc(r.title) +
-             ' <span class="mono" style="color:var(--muted);font-size:12px">' + esc(r.head_branch) + ' → ' + esc(r.base_branch) + '</span></span>' +
-             '<span class="row-links">' + links + '</span></div></div>';
+             '<div class="row-meta">' + outs + branch +
+             '<span class="row-links"><a href="' + esc(r.session_url) + '" target="_blank" rel="noopener">Devin session ↗</a></span></div>' +
+             planBlock(r.plan) + '</div>';
     }).join(""));
   }
 
+  /* -------- evidence: burn-down -------- */
   function renderBurn(m) {
     var bc = m.by_control || {};
     var keys = Object.keys(bc).sort(function (a, b) { return bc[b] - bc[a]; });
@@ -514,7 +593,7 @@
       return '<div class="bar-row"><div class="bar-label" title="' + esc(k) + '">' + esc(k) + '</div>' +
              '<div class="bar-track"><div class="bar-fill" style="width:' + w + '%"></div></div>' +
              '<div class="bar-count num">' + bc[k] + '</div></div>';
-    }).join("") : '<div class="empty">No open findings.</div>');
+    }).join("") : '<div class="empty">No findings yet — Devin maps each finding to its 800-53 control as it works.</div>');
 
     var bs = m.by_severity || {};
     var order = ["critical", "high", "medium", "low"];
@@ -525,15 +604,16 @@
       return '<div class="sev-row"><span class="cap">' + k + '</span>' +
              '<span class="sev-bar"><span style="width:' + w + '%;background:' + color[k] + '"></span></span>' +
              '<span class="n num">' + bs[k] + '</span></div>';
-    }).join("") || '<div class="note mono" style="color:var(--muted)">—</div>');
+    }).join("") || '<div class="note mono" style="color:var(--muted);font-family:var(--font-mono);font-size:12px">No open severities.</div>');
 
-    paint($("findHeadline"), '<b class="num">' + m.findings_remediated + '</b> remediated / <b class="num">' +
-      (m.findings_remediated + m.findings_open) + '</b> total');
+    paint($("findHeadline"), '<b class="num">' + (m.findings_remediated || 0) + '</b> remediated / <b class="num">' +
+      ((m.findings_remediated || 0) + (m.findings_open || 0)) + '</b> total');
   }
 
+  /* -------- tickets / POA&M -------- */
   function renderTickets(tickets) {
     if (!tickets || !tickets.length) {
-      paint($("board"), '<div class="empty" style="flex:1">No open tickets.</div>');
+      paint($("board"), '<div class="empty" style="flex:1">No tickets filed — Devin files a ticket only when a finding needs a human call.</div>');
       return;
     }
     var groups = {}, order = [];
@@ -554,15 +634,16 @@
     }).join(""));
   }
 
+  /* -------- activity -------- */
   var KIND = { remediate: "var(--devin)", reviewed: "var(--accent)", proxy: "var(--accent)",
-               ticket: "var(--warn)", attach: "var(--gh)", head: "var(--gh)",
-               skip: "var(--muted)", startup: "var(--muted)" };
+               ticket: "var(--warn)", attach: "var(--gh)", head: "var(--gh)", seed: "var(--accent)",
+               reset: "var(--crit)", skip: "var(--muted)", startup: "var(--muted)", warn: "var(--warn)" };
   function renderEvents(events) {
     if (!events || !events.length) {
       paint($("timeline"), '<div class="empty" style="border:none">No events yet.</div>');
       return;
     }
-    paint($("timeline"), events.slice(0, 30).map(function (e) {
+    paint($("timeline"), events.slice(0, 40).map(function (e) {
       var c = KIND[e.kind] || "var(--muted)";
       return '<div class="ev"><span class="k" style="background:' + c + '"></span>' +
              '<span class="txt"><span class="kind" style="color:' + c + '">' + esc(e.kind) + '</span>' + esc(e.detail) + '</span>' +
@@ -570,6 +651,7 @@
     }).join(""));
   }
 
+  /* -------- chat -------- */
   function renderChat(chat) {
     var el = $("messages");
     var nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
@@ -577,11 +659,21 @@
       var who = c.role === "user" ? "user" : "sentinel";
       return '<div class="msg ' + who + '"><span class="meta">' + (who === "user" ? "you" : "sentinel") + '</span>' +
              esc(c.content) + '</div>';
-    }).join("") : '<div class="note mono" style="color:var(--muted)">No messages yet — say hello.</div>';
+    }).join("") : '<div class="mono" style="color:var(--muted);font-size:13px">No messages yet — ask about program status, or paste a session id to steer Devin.</div>';
     if (el.__last !== html) {
       el.__last = html; el.innerHTML = html;
       if (nearBottom) el.scrollTop = el.scrollHeight;
     }
+  }
+
+  /* -------- remediate default (lowest open issue) -------- */
+  function updateRemediateDefault(tasks) {
+    var el = $("issueIn");
+    if (!el || document.activeElement === el || el.value) return;
+    var open = (tasks || []).filter(function (t) {
+      return t.phase !== "resolved" && t.phase !== "closed" && t.resolved == null;
+    }).map(function (t) { return t.issue; });
+    if (open.length) el.placeholder = "#" + Math.min.apply(null, open);
   }
 
   /* -------- polling -------- */
@@ -601,13 +693,14 @@
   function render(s) {
     target = s.target || "";
     $("target").textContent = target || "—";
-    renderTiles(s.metrics || {});
+    renderNarration(s);
     renderTasks(s.tasks);
     renderReviews(s.reviews);
     renderBurn(s.metrics || {});
     renderTickets(s.tickets);
     renderEvents(s.events);
     renderChat(s.chat);
+    updateRemediateDefault(s.tasks);
   }
 
   function poll() {
@@ -618,37 +711,53 @@
   }
 
   /* -------- actions -------- */
-  function toast(title, body, isErr) {
+  function toast(title, body, kind) {
     var t = document.createElement("div");
-    t.className = "toast" + (isErr ? " err" : "");
+    t.className = "toast" + (kind ? " " + kind : "");
     t.innerHTML = '<div class="t-h">' + esc(title) + '</div>' + (body ? '<div class="t-b">' + esc(body) + '</div>' : "");
     $("toast").appendChild(t);
-    setTimeout(function () { t.style.opacity = "0"; t.style.transition = "opacity .4s"; setTimeout(function () { t.remove(); }, 400); }, 6000);
+    setTimeout(function () { t.style.opacity = "0"; t.style.transition = "opacity .4s"; setTimeout(function () { t.remove(); }, 400); }, 6500);
   }
   function postJSON(url, body) {
-    return fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+    return fetch(url, { method: "POST", headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(body || {}) })
       .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) {
         if (!r.ok) throw new Error(j && j.error ? j.error : "HTTP " + r.status);
         return j; }); });
   }
 
-  $("runForm").addEventListener("submit", function (e) {
-    e.preventDefault();
-    var pr = parseInt($("prIn").value, 10);
-    if (!pr) { toast("Enter a PR number", "", true); return; }
-    postJSON("/api/demo/run", { pr: pr }).then(function (j) {
-      toast("PR #" + pr + " review dispatched", j.session_id || j.id || "queued");
-      $("prIn").value = ""; poll();
-    }).catch(function (err) { toast("Dispatch failed", err.message, true); });
+  $("resetBtn").addEventListener("click", function () {
+    if (!window.confirm("Close all PRs, delete Sentinel branches, reopen issues, wipe the board?")) return;
+    postJSON("/api/demo/reset").then(function (j) {
+      var parts = [];
+      parts.push("closed " + ((j.closed_prs || []).length) + " PR(s)");
+      parts.push("deleted " + ((j.deleted_branches || []).length) + " branch(es)");
+      if (j.reopened_issues && j.reopened_issues.length) parts.push("reopened " + j.reopened_issues.length + " issue(s)");
+      toast("Demo reset", parts.join(" · "));
+      poll();
+    }).catch(function (err) { toast("Reset failed", err.message, "err"); });
+  });
+  $("seedBtn").addEventListener("click", function () {
+    postJSON("/api/demo/seed").then(function (j) {
+      toast("Seed issues ensured", "created " + ((j.created || []).length) + " of " + (j.total_seed != null ? j.total_seed : "?"));
+      poll();
+    }).catch(function (err) { toast("Seed failed", err.message, "err"); });
+  });
+  $("seedPrBtn").addEventListener("click", function () {
+    postJSON("/api/demo/seed_pr").then(function (j) {
+      toast("Gate PR opened", j.pr != null ? "PR #" + j.pr + " — Devin's compliance gate will attach" : "opened");
+      poll();
+    }).catch(function (err) { toast("Open gate PR failed", err.message, "err"); });
   });
   $("remForm").addEventListener("submit", function (e) {
     e.preventDefault();
-    var issue = parseInt($("issueIn").value, 10);
-    if (!issue) { toast("Enter an issue number", "", true); return; }
+    var raw = $("issueIn").value.trim() || $("issueIn").placeholder.replace(/[^0-9]/g, "");
+    var issue = parseInt(raw, 10);
+    if (!issue) { toast("Enter an issue number", "", "err"); return; }
     postJSON("/api/demo/remediate", { issue: issue }).then(function (j) {
-      toast("Issue #" + issue + " remediation started", j.session_id || j.id || "queued");
+      toast("Issue #" + issue + " → Devin dispatched", j.session_id || "session starting", "devin");
       $("issueIn").value = ""; poll();
-    }).catch(function (err) { toast("Remediate failed", err.message, true); });
+    }).catch(function (err) { toast("Remediate failed", err.message, "err"); });
   });
   $("chatForm").addEventListener("submit", function (e) {
     e.preventDefault();
@@ -659,7 +768,7 @@
     if (sess) body.session_id = sess;
     $("msgIn").value = "";
     postJSON("/api/chat", body).then(function () { poll(); })
-      .catch(function (err) { toast("Send failed", err.message, true); });
+      .catch(function (err) { toast("Send failed", err.message, "err"); });
   });
 
   /* -------- theme toggle -------- */

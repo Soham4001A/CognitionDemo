@@ -367,5 +367,68 @@
       thing it was never meant to show: whether the whole program is in control.</p>
   </section>
 
+  <!-- ============ UNDER THE HOOD ============ -->
+  <style>
+    .arch { overflow-x: auto; background: var(--surface); border: 1px solid var(--line);
+            border-radius: 13px; padding: 18px 20px; margin: 0 0 22px; }
+    .arch pre { margin: 0; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.5;
+                color: var(--text); white-space: pre; }
+    .arch .accent { color: var(--accent-2); }
+    .decisions { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 6px; }
+    .decision { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); padding: 15px 17px; }
+    .decision h4 { margin: 0 0 5px; font-size: 15px; letter-spacing: -.01em; }
+    .decision p { margin: 0; color: var(--muted); font-size: 14px; }
+    .decision .n { font-family: var(--font-mono); font-size: 11px; color: var(--accent-2); font-weight: 640; }
+    .stack { font-family: var(--font-mono); font-size: 13px; color: var(--muted); margin-top: 18px;
+             background: var(--surface-2); border: 1px solid var(--line); border-radius: 9px; padding: 11px 14px; }
+    @media (max-width: 680px) { .decisions { grid-template-columns: 1fr; } }
+  </style>
+  <section>
+    <div class="sec-head">
+      <span class="eyebrow">Under the hood · for the engineers in the room</span>
+      <h2>The whole system is one FastAPI container</h2>
+      <p>It does no engineering. It turns repository events into Devin sessions, tracks them, and drives
+        GitHub's merge gate. Every box below is a small, single-purpose module — the product is the
+        <b>playbook</b> (what Devin is told to do), not the plumbing.</p>
+    </div>
+
+    <div class="arch"><pre>  <span class="accent">EVENTS</span>                        <span class="accent">ORCHESTRATOR</span>  ·  one container            <span class="accent">ACTS ON</span>
+  ────────────────────         ──────────────────────────────────         ─────────────────
+  issues.labeled       ┐       main.py         3 webhooks · demo API       Devin API
+  pull_request.opened  ┼─hook─▶ playbook.py     the two Devin job specs  ─▶  create · poll · steer
+  issue_comment  @      ┘       poller.py       track session → drive gate
+  Demo Control  ─POST──────────▶ github_client.py  status · PR · issue    ─▶  GitHub REST
+                                state.py        SQLite   ·   static/ dashboard   checks · PRs · issues</pre></div>
+
+    <div class="tbl-scroll" style="margin-bottom:26px">
+      <table>
+        <thead><tr><th style="width:190px">Module</th><th>Role</th><th>A decision worth noting</th></tr></thead>
+        <tbody>
+          <tr><td class="what mono">playbook.py</td><td>The two Devin job descriptions — PR review &amp; issue remediation</td><td>The core IP is a <b>prompt</b>, not an algorithm: judgment is delegated to Devin</td></tr>
+          <tr><td class="what mono">main.py</td><td>FastAPI: <code>issues</code>/<code>pull_request</code>/<code>issue_comment</code> webhooks, demo-control API, serves the dashboard</td><td>Recursion guard: <code>sentinel/*</code> branches &amp; Devin-authored PRs never re-trigger</td></tr>
+          <tr><td class="what mono">poller.py</td><td>One async loop tracking every session → drives the required check to resolution</td><td>Re-pins the check to the PR's <b>live head</b>; idempotent status writes</td></tr>
+          <tr><td class="what mono">github_client.py</td><td>Commit statuses, PRs, issues, branches, branch cleanup</td><td><code>devin/compliance</code> is the single required gate in branch protection</td></tr>
+          <tr><td class="what mono">devin.py</td><td>Thin Devin API client (create / get / list / message)</td><td>Normalizes <code>status_enum</code> → running · blocked · done</td></tr>
+          <tr><td class="what mono">state.py</td><td>SQLite: reviews · tasks · findings · tickets · events</td><td>Additive migrations + <code>reset()</code> for repeatable demos</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="sec-head" style="margin-bottom:14px">
+      <span class="eyebrow">The architectural decisions</span>
+      <h2 style="font-size:20px">Six calls that make it a control, not a script</h2>
+    </div>
+    <div class="decisions">
+      <div class="decision"><span class="n">01</span><h4>Devin is the primitive</h4><p>The orchestrator writes zero code. It dispatches a session and observes — every fix, PR, and comment is Devin's. Swap the playbook, not the plumbing, to retarget it.</p></div>
+      <div class="decision"><span class="n">02</span><h4>The gate is a real GitHub check</h4><p>Sentinel sets a <code>devin/compliance</code> commit status; branch protection makes it <b>required</b>, so a PR genuinely cannot merge until Sentinel is green.</p></div>
+      <div class="decision"><span class="n">03</span><h4>Risk-routed autonomy</h4><p>Docs auto-commit (low-risk); security fixes go to a human-approved proxy PR; judgment calls become tickets + POA&amp;M. Not everything should be auto-applied.</p></div>
+      <div class="decision"><span class="n">04</span><h4>Two loops, one poller</h4><p>Issue-remediation (issue → PR that <code>Closes #N</code>) and PR-review (gate + proxy PR) are distinct triggers that share one tracking loop and one state store.</p></div>
+      <div class="decision"><span class="n">05</span><h4>Built to survive a real repo</h4><p>Idempotent status writes, live-head re-pin after a squash-merge, proxy-PR detection by branch, blocked-as-ready, and a self-recursion guard — the failure modes a live PR actually hits.</p></div>
+      <div class="decision"><span class="n">06</span><h4>One container, reproducible</h4><p>FastAPI serves the API <i>and</i> the dashboard; SQLite for state; a background async poll loop; a single Docker image with pinned deps. <code>docker compose up</code> is the whole stack.</p></div>
+    </div>
+
+    <p class="stack">Python 3.12 · FastAPI + Uvicorn · httpx · SQLite · Docker (single pinned image) · Devin API · GitHub REST · cloudflared for webhook delivery</p>
+  </section>
+
   <footer>Sentinel · Devin API integration · target repo Soham4001A/superset-cognition-demo</footer>
 </div>
