@@ -208,7 +208,7 @@ _FLAWED_DOCKERFILE = (
 
 
 @app.post("/api/demo/reset")
-def demo_reset(body: dict[str, Any] | None = None):
+def demo_reset():
     """Clean the fork to a repeatable demo baseline: close open PRs, delete sentinel/* branches,
     reopen + unlabel the seed issues, and wipe orchestrator state. Scoped to demo artifacts only."""
     summary = {"closed_prs": [], "deleted_branches": [], "reopened_issues": [], "unlabeled_issues": []}
@@ -244,7 +244,7 @@ def demo_reset(body: dict[str, Any] | None = None):
 
 
 @app.post("/api/demo/seed")
-def demo_seed(body: dict[str, Any] | None = None):
+def demo_seed():
     """Ensure the control-mapped seed issues exist (open + unlabeled) so a live remediation is repeatable."""
     if not gh:
         return {"error": "GH_PERSONAL_TOKEN required"}
@@ -259,7 +259,7 @@ def demo_seed(body: dict[str, Any] | None = None):
 
 
 @app.post("/api/demo/seed_pr")
-def demo_seed_pr(body: dict[str, Any] | None = None):
+def demo_seed_pr():
     """Recreate a live PR-gate demo: a fresh branch off the base with a deliberately-flawed Dockerfile
     (unpinned base, apt hygiene, an undocumented flag) → opens a PR that triggers Devin's compliance gate."""
     if not gh:
