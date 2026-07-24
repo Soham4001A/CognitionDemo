@@ -1,37 +1,70 @@
 # Sentinel
 
-**An autonomous, _required_ compliance & documentation gate on every pull request — powered by [Devin](https://devin.ai).**
+**Event-driven remediation & a required compliance gate — powered by [Devin](https://devin.ai).**
 
-Everyone builds *"Devin, go build ticket X → PR."* Sentinel inverts it: Devin **auto-attaches to every
-freshly-opened PR** as a **required reviewer**. It clones the repo in its own container, verifies docs
-against the diff, runs a control-mapped compliance scan suite, fixes what it can, opens a reviewable
-**proxy PR** for the risky changes, files tickets, updates the **SSP/POA&M**, and **blocks merge** until
-it's satisfied and a human has approved the security changes. It's the orchestration pattern a regulated
-(federal/ATO) shop already runs by hand — productized on Devin.
+Two event-driven loops, both with Devin as the primitive that does the actual engineering:
+
+1. **Issue remediation (the hook).** File a GitHub issue labeled `sentinel:remediate` → an `issues`
+   webhook dispatches a Devin session that clones the repo, fixes the issue in its own container, and
+   opens a PR that **`Closes #N`**. Merge it and the issue closes itself.
+2. **PR compliance gate (the depth).** When any PR opens, Devin auto-attaches as a **required reviewer**:
+   verifies docs against the diff, runs a control-mapped scan suite, fixes what it can, opens a reviewable
+   **proxy PR** for the risky changes, files tickets, updates the **SSP/POA&M**, and **blocks merge** via a
+   required `devin/compliance` check until a human approves the security changes.
+
+The orchestrator does **zero engineering** — it routes events, sets the gate, and observes. Devin clones,
+fixes, and opens PRs. It's the orchestration pattern a regulated (federal/ATO) shop runs by hand —
+productized on Devin, with a leader's dashboard for observability.
 
 ## Quickstart
 
 ```bash
 ./setup.sh          # checks Docker, fills .env (DEVIN_API_KEY, GH_PERSONAL_TOKEN), preflights, builds
-docker compose up   # (or: make up)  → http://localhost:8080
-# in the dashboard: click "▶ Run Demo"   (headless: ./demo.sh [PR_NUMBER]  /  make demo PR=123)
+docker compose up   # (or: make up)  → http://localhost:8080   (also /how-it-works.html)
 ```
 
-One container (`sentinel`) serves the API **and** the dashboard on `:8080`.
+One container (`sentinel`) serves the API **and** the dashboard on `:8080`. Two ways to demo each loop:
 
-## The loop (per PR)
-
-```
-PR opened → orchestrator sets required check "devin/compliance = pending" → dispatches Devin
-Devin (own container): clone+diff → verify docs (fix → commit to feature branch, no gate)
-   → run scan suite → open PROXY PR (human-approve to merge) → required review comment
-   → file tickets → update SSP/POA&M (finding → 800-53 control)
-Dashboard: instances · PR/CI status · POA&M burn-down · MTTR · plans · chat (steer sessions)
+```bash
+# Issue remediation:  label an issue sentinel:remediate  (true webhook)
+#                     …or headless:  curl -X POST localhost:8080/api/demo/remediate -d '{"issue":6}'
+# PR compliance gate:  open a PR      (true webhook)
+#                     …or dashboard "Run PR review" / curl -X POST localhost:8080/api/demo/run -d '{"pr":3}'
 ```
 
-**Required, not additive:** docs auto-commit (low-risk); security → proxy PR (human approval required);
-every PR gets a required `devin/compliance` status + a required review comment. Make those required
-checks in branch protection to truly gate merges.
+## Triggers (all three, live)
+
+| Trigger | Event | Loop |
+|---|---|---|
+| **Issue labeled** `sentinel:remediate` | `issues` webhook | remediation → PR that `Closes #N` |
+| **PR opened** | `pull_request` webhook | compliance gate → proxy PR |
+| **@sentinel / @devin** in a PR comment | `issue_comment` webhook | compliance gate |
+| **Chat** ("review PR 3") | dashboard `/api/chat` | either, + steer a live session by id |
+
+Self-recursion is guarded: `sentinel/*` branches and Devin-authored PRs never trigger a new review.
+
+## The two loops
+
+```
+ISSUE:  issue labeled sentinel:remediate → Devin session → fix in-container
+        → PR that `Closes #N` → (human merges) → issue auto-closes → task resolved
+
+PR:     PR opened → required check devin/compliance = pending → Devin session
+        → docs fixed+committed to the branch (low-risk, no gate)
+        → scan suite → PROXY PR (human-approve to merge) → ONE unified review comment
+        → tickets + SSP/POA&M (finding → 800-53 control) → gate resolves on merge
+```
+
+Docs auto-commit (low-risk); security fixes go through a proxy PR (human approval required); every PR
+gets a required `devin/compliance` status. Devin's built-in PR reviewer is **fused in** — Sentinel folds
+its findings into one unified verdict comment rather than leaving a second advisory review.
+
+## Observability (Part 3 — "how would a leader know this is working?")
+
+The dashboard (`localhost:8080`) is the compliance control plane — it deep-links out to Devin for any
+single session rather than reproducing it: program-posture tiles (issues remediated, PRs gated, findings,
+active sessions, **MTTR**), the issue→session→PR→closed track, the PR-review gate track, a
+**findings-by-800-53-control** burn-down, a ticket board, an event/audit timeline, and chat to steer Devin.
 
 ## Compliance suite (control-mapped, static)
 
@@ -43,20 +76,22 @@ Each finding becomes a POA&M item tied to its control. (DAST/OpenSCAP/Nessus →
 
 | Path | What |
 |---|---|
-| `orchestrator/app/playbook.py` | **core IP** — the per-PR Devin job description |
-| `orchestrator/app/main.py` | FastAPI: webhook · demo · tickets · state · chat · serves the dashboard |
-| `orchestrator/app/{devin,github_client,state,poller}.py` | Devin client · GitHub client · SQLite state · poll loop |
-| `orchestrator/static/index.html` | SOC-style dashboard |
-| `compliance/` | SSP + POA&M (Devin-maintained) · `scanners/` · required `compliance.yml` Action |
+| `orchestrator/app/playbook.py` | **core IP** — the per-PR review + per-issue remediation Devin job descriptions |
+| `orchestrator/app/main.py` | FastAPI: `issues`/`pull_request`/`issue_comment` webhooks · demo · tickets · state · chat |
+| `orchestrator/app/poller.py` | tracks Devin sessions → drives the gate + issue-remediation to resolution |
+| `orchestrator/app/{devin,github_client,state}.py` | Devin client · GitHub client · SQLite state |
+| `orchestrator/static/index.html` | the compliance control-plane dashboard |
+| `orchestrator/static/how-it-works.html` | visual walkthrough (served at `/how-it-works.html`) |
+| `compliance/` | SSP + POA&M (Devin-maintained) · `scanners/` · `compliance.yml` Action |
 | `PLAN.md` · `TRACKER.md` · `AGENT_ONBOARD.md` | architecture · build notebook · fresh-agent context |
 
 ## Config (`.env`, gitignored — see `.env.example`)
 - `DEVIN_API_KEY` — `apk_user_…` (Devin → Settings → API Keys).
-- `GH_PERSONAL_TOKEN` — fine-grained PAT (Contents/Issues/PRs/Statuses R/W). Optional for a dry demo;
-  required for live required-check / PR-comment / proxy-PR actions on the fork.
+- `GH_PERSONAL_TOKEN` — fine-grained PAT (Contents/Issues/PRs/Statuses/Administration R/W on the fork).
+- `PUBLIC_URL` — public base (e.g. a `cloudflared` tunnel) so GitHub webhooks reach the orchestrator.
 
 ## Target repo
-`Soham4001A/superset-cognition-demo` (fork of apache/superset) — carries the compliance kit + the
-required Action; it's what Sentinel guards.
+`Soham4001A/superset-cognition-demo` (fork of apache/superset) — carries the compliance kit, the required
+`devin/compliance` branch-protection check, and the seeded issues (`sentinel:remediate`) Sentinel remediates.
 
-See **`PLAN.md`** for the full architecture, the federal framing, and the Nexus→Sentinel transposition.
+See **`PLAN.md`** for the full architecture and federal framing, and `/how-it-works.html` for the visual walkthrough.

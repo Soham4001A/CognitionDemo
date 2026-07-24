@@ -19,11 +19,16 @@ The engineering-notebook for this build (the Nexus discipline Sentinel productiz
 | 4 Dashboard | tiles · instances/PR/CI table · burn-down · Kanban · timeline | ✅ done |
 | 4 | chat → orchestrator (state + steer session via `@id`) | ✅ done |
 | 6 Docker | `docker compose up --build` clean (one container, dashboard+API) | ✅ done (verified in-container) |
-| 8 Packaging | `setup.sh` + preflight · "Run Demo" button + `demo.sh` + `Makefile` · `AGENT_ONBOARD.md` | ✅ done |
-| 6 Deliver | README · `LOOM.md` (5-min script) | ✅ done |
-| Demo prep | deterministic demo PR staged on fork (`demo/sentinel-showcase`) | ✅ done |
-| — E2E | fire ONE real Devin session on the demo PR (needs `GH_PERSONAL_TOKEN` + ACU) | ⬜ **gated on operator** |
-| — Branch protection | make `compliance` + `devin/compliance` required checks on fork | ⬜ needs PAT/admin |
+| 8 Packaging | `setup.sh` + preflight · demo buttons + `demo.sh` + `Makefile` · `AGENT_ONBOARD.md` | ✅ done |
+| 6 Deliver | README · `LOOM.md` (5-min script) · `how-it-works.html` visual | ✅ done |
+| 1 Issues | 5 control-mapped Issues filed on fork (#5–#9), `sentinel:remediate` label | ✅ done (Part 1) |
+| 2 Issue loop | `issues` webhook → `build_remediation_playbook` → PR that `Closes #N`; tasks table + `_task_tick` | ✅ done |
+| 3 Fusion | review playbook folds native Devin review into ONE unified verdict comment | ✅ done |
+| 4 Dashboard v2 | clean compliance control-plane cockpit (issue track + gate track + burn-down + chat) | ✅ done |
+| — E2E issue | issue #5 → Devin → PR #10 (`Closes #5`) → merged → **issue auto-closed** → task resolved | ✅ **proven live** |
+| — E2E PR gate | PR #3 → docs commit + proxy PR #4 → merged → gate `success` | ✅ **proven live** |
+| — Branch protection | `devin/compliance` required check on `master` (fork) | ✅ done (sole required gate) |
+| — Demo state | issue #6 → PR #11 left open = live "awaiting approval" beat for the Loom | ✅ staged |
 
 ## Decisions log
 - **Ticket board:** built-in (dashboard-hosted), not external JIRA (no license). API for Devin to file into.
