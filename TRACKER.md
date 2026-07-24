@@ -16,12 +16,14 @@ The engineering-notebook for this build (the Nexus discipline Sentinel productiz
 | 2 | `main.py` webhook → playbook → session → required-check | ✅ done (smoke-tested) |
 | 3 Playbook | `playbook.py` (docs + scan + proxy-PR + comment + ticket + POA&M) | ✅ done |
 | 5 Board | built-in ticket board API (`POST /api/tickets`) | ✅ done (Kanban UI = Phase 4) |
-| 4 Dashboard | instances · PRs+CI · findings/POA&M burn-down · plans · Kanban | ⏳ next |
-| 4 | chat → orchestrator (state + steer session) | ⬜ |
-| 6 Docker | `docker compose up` clean | ⬜ |
-| 8 Packaging | `setup.sh` · "Run Demo" button + `demo.sh` · `AGENT_ONBOARD.md` | ⬜ |
-| 6 Deliver | README · Loom script | ⬜ |
-| — E2E | fire ONE real Devin session on a real PR (needs GH_PERSONAL_TOKEN) | ⬜ deliberate w/ operator |
+| 4 Dashboard | tiles · instances/PR/CI table · burn-down · Kanban · timeline | ✅ done |
+| 4 | chat → orchestrator (state + steer session via `@id`) | ✅ done |
+| 6 Docker | `docker compose up --build` clean (one container, dashboard+API) | ✅ done (verified in-container) |
+| 8 Packaging | `setup.sh` + preflight · "Run Demo" button + `demo.sh` + `Makefile` · `AGENT_ONBOARD.md` | ✅ done |
+| 6 Deliver | README · `LOOM.md` (5-min script) | ✅ done |
+| Demo prep | deterministic demo PR staged on fork (`demo/sentinel-showcase`) | ✅ done |
+| — E2E | fire ONE real Devin session on the demo PR (needs `GH_PERSONAL_TOKEN` + ACU) | ⬜ **gated on operator** |
+| — Branch protection | make `compliance` + `devin/compliance` required checks on fork | ⬜ needs PAT/admin |
 
 ## Decisions log
 - **Ticket board:** built-in (dashboard-hosted), not external JIRA (no license). API for Devin to file into.
