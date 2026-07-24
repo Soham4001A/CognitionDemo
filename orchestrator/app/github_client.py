@@ -69,6 +69,51 @@ class GitHubClient:
         return self._r("POST", f"/repos/{self.owner}/{self.name}/issues/{number}/comments",
                        json={"body": body})
 
+    # ---- demo-control ops (reset the fork to a clean, repeatable demo state) ----
+    def list_pulls(self, state: str = "open") -> list[dict[str, Any]]:
+        return self._r("GET", f"/repos/{self.owner}/{self.name}/pulls",
+                       params={"state": state, "per_page": 100})
+
+    def close_pull(self, number: int) -> None:
+        self._r("PATCH", f"/repos/{self.owner}/{self.name}/pulls/{number}", json={"state": "closed"})
+
+    def list_issues_only(self, state: str = "all") -> list[dict[str, Any]]:
+        rows = self._r("GET", f"/repos/{self.owner}/{self.name}/issues",
+                       params={"state": state, "per_page": 100})
+        return [i for i in rows if "pull_request" not in i]  # /issues also returns PRs
+
+    def set_issue_state(self, number: int, state: str) -> None:
+        self._r("PATCH", f"/repos/{self.owner}/{self.name}/issues/{number}", json={"state": state})
+
+    def set_issue_labels(self, number: int, labels: list[str]) -> None:
+        self._r("PUT", f"/repos/{self.owner}/{self.name}/issues/{number}/labels", json={"labels": labels})
+
+    def add_issue_labels(self, number: int, labels: list[str]) -> None:
+        self._r("POST", f"/repos/{self.owner}/{self.name}/issues/{number}/labels", json={"labels": labels})
+
+    def list_branches(self) -> list[dict[str, Any]]:
+        return self._r("GET", f"/repos/{self.owner}/{self.name}/branches", params={"per_page": 100})
+
+    def delete_branch(self, branch: str) -> None:
+        self._r("DELETE", f"/repos/{self.owner}/{self.name}/git/refs/heads/{branch}")
+
+    def default_branch_sha(self, base: str) -> str:
+        return self._r("GET", f"/repos/{self.owner}/{self.name}/git/refs/heads/{base}")["object"]["sha"]
+
+    def create_branch(self, branch: str, from_sha: str) -> None:
+        self._r("POST", f"/repos/{self.owner}/{self.name}/git/refs",
+                json={"ref": f"refs/heads/{branch}", "sha": from_sha})
+
+    def put_file(self, path: str, branch: str, content_b64: str, message: str, sha: str | None = None) -> dict:
+        body = {"message": message, "content": content_b64, "branch": branch}
+        if sha:
+            body["sha"] = sha
+        return self._r("PUT", f"/repos/{self.owner}/{self.name}/contents/{path}", json=body)
+
+    def open_pull(self, title: str, head: str, base: str, body: str) -> dict[str, Any]:
+        return self._r("POST", f"/repos/{self.owner}/{self.name}/pulls",
+                       json={"title": title, "head": head, "base": base, "body": body})
+
     def set_required_check(self, sha: str, state: str, description: str, target_url: str = "") -> None:
         """state ∈ pending|success|failure|error. Set the `devin/compliance` commit status —
         make this context a required check in branch protection to gate merges."""

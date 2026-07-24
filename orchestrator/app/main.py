@@ -12,6 +12,7 @@ Routes:
 from __future__ import annotations
 
 import asyncio
+import base64
 import os
 import re
 from typing import Any
@@ -169,6 +170,115 @@ async def create_ticket(body: dict[str, Any]):
     }])
     store.log("ticket", f"{tid} [{control}/{sev}] {title}", pr)
     return {"id": tid}
+
+
+# The control-mapped issues the demo remediates — seeded so a live run is repeatable.
+SEED_ISSUES = [
+    {"title": "[SR-3] Add Apache license headers to compliance scanner scripts",
+     "body": "`compliance/scanners/normalize.py` and `compliance/scanners/run_scans.sh` ship without the "
+             "standard Apache Software Foundation license header carried by the rest of the tree — a "
+             "software-supply-chain / provenance gap (NIST 800-53 **SR-3**, SA-5).\n\n**Remediation:** "
+             "prepend the standard ASF header to both files. No logic changes."},
+    {"title": "[RA-5/SI-2] Pin scanner tool versions in run_scans.sh",
+     "body": "`compliance/scanners/run_scans.sh` installs tooling unpinned (`pip install -q semgrep`, "
+             "`bandit`, `pip-licenses`) — non-reproducible and a supply-chain risk (NIST 800-53 "
+             "**RA-5 / SI-2 / SR-3**).\n\n**Remediation:** pin each scanner to a known-good version."},
+    {"title": "[CM-6/CM-7] Harden dockerize.Dockerfile against Hadolint findings",
+     "body": "`dockerize.Dockerfile` should be reviewed against Hadolint (NIST 800-53 **CM-6 / CM-7**): "
+             "pin the base tag, add `--no-install-recommends` + version pins, clean apt lists in-layer, "
+             "run non-root where feasible.\n\n**Remediation:** apply hardening; keep it functional."},
+    {"title": "[SA-11] Harden JSON/subprocess handling in normalize.py",
+     "body": "`compliance/scanners/normalize.py` must never crash the gate on malformed/empty scanner "
+             "JSON (NIST 800-53 **SA-11**). Review for bare `except:`, missing empty-input guards.\n\n"
+             "**Remediation:** tighten exception handling + guards so a bad raw file degrades gracefully."},
+    {"title": "[IA-5/SC-28] .gitignore does not exclude scanner outputs",
+     "body": "Scan runs write `sentinel-scan/` (raw JSON, SBOM, findings) which can contain paths and "
+             "matched secret material — must not be committed (NIST 800-53 **IA-5 / SC-28**).\n\n"
+             "**Remediation:** add `sentinel-scan/` and `*.sarif` to `.gitignore`."},
+]
+
+_FLAWED_DOCKERFILE = (
+    "# demo.live.Dockerfile — deliberately flawed for the Sentinel PR-gate demo\n"
+    "FROM python:latest\n"                       # unpinned base (Hadolint DL3007)
+    "RUN apt-get update && apt-get install -y curl\n"  # no --no-install-recommends / no cleanup
+    "ENV SENTINEL_LIVE_DEMO_FLAG=1\n"            # undocumented flag → docs drift
+    "COPY . /app\n"
+    "CMD python /app/main.py\n"
+)
+
+
+@app.post("/api/demo/reset")
+def demo_reset(body: dict[str, Any] | None = None):
+    """Clean the fork to a repeatable demo baseline: close open PRs, delete sentinel/* branches,
+    reopen + unlabel the seed issues, and wipe orchestrator state. Scoped to demo artifacts only."""
+    summary = {"closed_prs": [], "deleted_branches": [], "reopened_issues": [], "unlabeled_issues": []}
+    if gh:
+        for p in gh.list_pulls("open"):
+            try:
+                gh.close_pull(p["number"]); summary["closed_prs"].append(p["number"])
+            except Exception as e:
+                store.log("warn", f"reset: close PR #{p['number']} failed: {e}")
+        for b in gh.list_branches():
+            name = b.get("name", "")
+            if name.startswith("sentinel/") or name.startswith("demo/live"):
+                try:
+                    gh.delete_branch(name); summary["deleted_branches"].append(name)
+                except Exception as e:
+                    store.log("warn", f"reset: delete branch {name} failed: {e}")
+        for i in gh.list_issues_only("all"):
+            n = i["number"]
+            if i.get("state") == "closed":
+                try:
+                    gh.set_issue_state(n, "open"); summary["reopened_issues"].append(n)
+                except Exception:
+                    pass
+            if any(l.get("name") == REMEDIATE_LABEL for l in (i.get("labels") or [])):
+                try:
+                    gh.set_issue_labels(n, []); summary["unlabeled_issues"].append(n)
+                except Exception:
+                    pass
+    store.reset()
+    store.log("reset", f"demo reset — closed {len(summary['closed_prs'])} PR(s), "
+                       f"deleted {len(summary['deleted_branches'])} branch(es)")
+    return {"ok": True, **summary}
+
+
+@app.post("/api/demo/seed")
+def demo_seed(body: dict[str, Any] | None = None):
+    """Ensure the control-mapped seed issues exist (open + unlabeled) so a live remediation is repeatable."""
+    if not gh:
+        return {"error": "GH_PERSONAL_TOKEN required"}
+    existing = {i["title"] for i in gh.list_issues_only("all")}
+    created = []
+    for spec in SEED_ISSUES:
+        if spec["title"] not in existing:
+            r = gh.create_issue(spec["title"], spec["body"], [])
+            created.append(r["number"])
+    store.log("seed", f"seed issues ensured ({len(created)} created)")
+    return {"ok": True, "created": created, "total_seed": len(SEED_ISSUES)}
+
+
+@app.post("/api/demo/seed_pr")
+def demo_seed_pr(body: dict[str, Any] | None = None):
+    """Recreate a live PR-gate demo: a fresh branch off the base with a deliberately-flawed Dockerfile
+    (unpinned base, apt hygiene, an undocumented flag) → opens a PR that triggers Devin's compliance gate."""
+    if not gh:
+        return {"error": "GH_PERSONAL_TOKEN required"}
+    branch = "demo/live-review"
+    try:
+        gh.delete_branch(branch)  # start fresh if it lingers
+    except Exception:
+        pass
+    base_sha = gh.default_branch_sha(REPO_DEFAULT_BASE)
+    gh.create_branch(branch, base_sha)
+    gh.put_file("demo.live.Dockerfile", branch,
+                base64.b64encode(_FLAWED_DOCKERFILE.encode()).decode(),
+                "demo: add live-review Dockerfile (deliberately flawed)")
+    pr = gh.open_pull("Add live demo service (compliance gate showcase)", branch, REPO_DEFAULT_BASE,
+                      "Adds a demo service Dockerfile with an undocumented flag — for the Sentinel "
+                      "compliance-gate live demo. Devin should flag the hardening + docs drift.")
+    store.log("seed", f"seed PR #{pr['number']} opened on {branch}")
+    return {"ok": True, "pr": pr["number"], "url": pr.get("html_url")}
 
 
 @app.post("/api/demo/remediate")

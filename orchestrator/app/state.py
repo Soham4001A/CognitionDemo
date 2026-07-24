@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS tickets (
 CREATE TABLE IF NOT EXISTS tasks (
   issue INTEGER PRIMARY KEY, title TEXT, control TEXT, severity TEXT, session_id TEXT,
   session_url TEXT, phase TEXT, pr_number INTEGER, check_state TEXT, check_sig TEXT,
-  created REAL, updated REAL, resolved REAL
+  summary TEXT, evidence TEXT, created REAL, updated REAL, resolved REAL
 );
 CREATE TABLE IF NOT EXISTS chat (
   id INTEGER PRIMARY KEY AUTOINCREMENT, role TEXT, content TEXT, session_id TEXT, ts REAL
@@ -67,6 +67,10 @@ class Store:
         for col, decl in (("check_sig", "TEXT"),):
             if col not in have:
                 self.db.execute(f"ALTER TABLE reviews ADD COLUMN {col} {decl}")
+        have_t = {r[1] for r in self.db.execute("PRAGMA table_info(tasks)")}
+        for col, decl in (("summary", "TEXT"), ("evidence", "TEXT")):
+            if col not in have_t:
+                self.db.execute(f"ALTER TABLE tasks ADD COLUMN {col} {decl}")
 
     # ---- reviews ----
     def upsert_review(self, pr: int, **fields) -> None:
@@ -118,6 +122,12 @@ class Store:
 
     def list_tickets(self) -> list[dict[str, Any]]:
         return [dict(r) for r in self.db.execute("SELECT * FROM tickets ORDER BY created DESC").fetchall()]
+
+    def reset(self) -> None:
+        """Wipe operational state for a clean demo run (schema preserved)."""
+        for tbl in ("reviews", "tasks", "findings", "tickets", "events", "chat"):
+            self.db.execute(f"DELETE FROM {tbl}")
+        self.db.commit()
 
     # ---- issue-remediation tasks (issue -> Devin session -> PR that Closes #issue) ----
     def upsert_task(self, issue: int, **fields) -> None:

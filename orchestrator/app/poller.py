@@ -55,6 +55,10 @@ async def _task_tick(store, devin, gh, t: dict[str, Any]) -> None:
                 fields["severity"] = so["severity"]
             if so.get("pr") and not t.get("pr_number"):
                 fields["pr_number"] = _pr_number(so["pr"])
+            if so.get("summary"):
+                fields["summary"] = str(so["summary"])[:400]
+            if so.get("scanner_evidence"):
+                fields["evidence"] = str(so["scanner_evidence"])[:400]
 
     # Detect the remediation PR by its branch, independent of structured_output.
     pr_number = fields.get("pr_number") or t.get("pr_number")
