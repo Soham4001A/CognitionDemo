@@ -54,22 +54,49 @@ async def _tick(store, devin, gh, r: dict[str, Any]) -> None:
         if structured.get("proxy_pr") and not r.get("proxy_pr"):
             fields["proxy_pr"] = _pr_number(structured["proxy_pr"])
 
-    # First time the review completes → record MTTR + start gate resolution.
-    if phase == "done" and not r.get("commented"):
-        fields["commented"] = time.time()
-        store.log("reviewed", f"Devin finished review of PR #{pr}", pr)
+    # Proxy-PR detection independent of structured_output: Devin only writes structured output at
+    # the very end (session may sit in working/blocked with the proxy PR already open). Detect it by
+    # its branch so the gate can advance to "awaiting approval" the moment the PR exists.
+    proxy = fields.get("proxy_pr") or r.get("proxy_pr")
+    if not proxy and gh:
+        found = await asyncio.to_thread(gh.find_open_pr_by_head, f"sentinel/compliance-{pr}")
+        if found:
+            proxy = found
+            fields["proxy_pr"] = found
+            store.log("proxy", f"detected proxy PR #{found} for PR #{pr}", pr)
 
-    # Drive the required check whenever the review is (or has been) done.
-    if phase == "done" or r.get("commented"):
-        proxy = fields.get("proxy_pr") or r.get("proxy_pr")
+    # Keep the required check pinned to the LIVE head sha. Devin's docs auto-commit advances the
+    # feature branch, which strands a status set on the prior sha — re-pin so the gate stays on the
+    # actually-mergeable commit.
+    head_sha = r.get("head_sha")
+    if gh:
+        live_sha = await asyncio.to_thread(gh.pr_head_sha, pr)
+        if live_sha and live_sha != head_sha:
+            store.log("head", f"PR #{pr} head advanced {(head_sha or '')[:8]}→{live_sha[:8]} — re-pinning check", pr)
+            head_sha = live_sha
+            fields["head_sha"] = live_sha
+
+    # Review is materially complete once Devin is done OR its proxy PR is open (scan + remediation
+    # landed). Bare `blocked` is ambiguous — Devin may be stuck mid-work asking a question — so it is
+    # NOT a completion signal on its own, or we'd resolve the gate to success prematurely.
+    review_complete = phase == "done" or bool(proxy)
+    if review_complete and not r.get("commented"):
+        fields["commented"] = time.time()
+        store.log("reviewed", f"Devin review of PR #{pr} complete (proxy PR {proxy or 'none'})", pr)
+
+    if review_complete or r.get("commented"):
         state, desc, resolved = await _gate(gh, proxy)
         fields["check_state"] = state
         if resolved:
             fields["phase"] = "resolved"
-        if gh and r.get("head_sha"):
+        # Only write the status when it actually changed — the poll loop runs every 15s and would
+        # otherwise spam the PR's status history with identical rows (noise in the audit trail).
+        sig = f"{head_sha}:{state}:{desc}"
+        if gh and head_sha and sig != r.get("check_sig"):
             try:
-                await asyncio.to_thread(gh.set_required_check, r["head_sha"], state, desc,
+                await asyncio.to_thread(gh.set_required_check, head_sha, state, desc,
                                         r.get("session_url", ""))
+                fields["check_sig"] = sig
             except Exception as e:
                 store.log("warn", f"set check {state} failed: {e}", pr)
 

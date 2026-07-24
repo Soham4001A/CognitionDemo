@@ -40,6 +40,24 @@ class GitHubClient:
     def get_pr(self, number: int) -> dict[str, Any]:
         return self._r("GET", f"/repos/{self.owner}/{self.name}/pulls/{number}")
 
+    def pr_head_sha(self, number: int) -> str:
+        """Live head sha of a PR. Devin's docs auto-commit advances the feature branch, so the
+        required check must be re-pinned to THIS sha or it strands on a stale commit."""
+        try:
+            return self.get_pr(number).get("head", {}).get("sha", "")
+        except Exception:
+            return ""
+
+    def find_open_pr_by_head(self, head_branch: str) -> int | None:
+        """Find an OPEN PR whose head is `head_branch` (e.g. sentinel/compliance-<pr>). Lets the
+        poller detect Devin's proxy PR without waiting for it to land in structured_output."""
+        try:
+            prs = self._r("GET", f"/repos/{self.owner}/{self.name}/pulls",
+                          params={"state": "open", "head": f"{self.owner}:{head_branch}"})
+            return prs[0]["number"] if prs else None
+        except Exception:
+            return None
+
     def set_required_check(self, sha: str, state: str, description: str, target_url: str = "") -> None:
         """state ∈ pending|success|failure|error. Set the `devin/compliance` commit status —
         make this context a required check in branch protection to gate merges."""

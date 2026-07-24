@@ -17,7 +17,7 @@ _SCHEMA = """
 CREATE TABLE IF NOT EXISTS reviews (
   pr INTEGER PRIMARY KEY, repo TEXT, title TEXT, head_branch TEXT, base_branch TEXT,
   head_sha TEXT, session_id TEXT, session_url TEXT, phase TEXT, check_state TEXT,
-  proxy_pr INTEGER, comment_url TEXT, plan TEXT, structured TEXT,
+  proxy_pr INTEGER, comment_url TEXT, plan TEXT, structured TEXT, check_sig TEXT,
   created REAL, updated REAL, commented REAL
 );
 CREATE TABLE IF NOT EXISTS findings (
@@ -52,7 +52,16 @@ class Store:
         self.db = sqlite3.connect(path, check_same_thread=False)
         self.db.row_factory = sqlite3.Row
         self.db.executescript(_SCHEMA)
+        self._migrate()
         self.db.commit()
+
+    def _migrate(self) -> None:
+        """Additive column migrations for DBs created before a column existed (CREATE TABLE IF NOT
+        EXISTS won't add them). Each ALTER is idempotent — ignore 'duplicate column' errors."""
+        have = {r[1] for r in self.db.execute("PRAGMA table_info(reviews)")}
+        for col, decl in (("check_sig", "TEXT"),):
+            if col not in have:
+                self.db.execute(f"ALTER TABLE reviews ADD COLUMN {col} {decl}")
 
     # ---- reviews ----
     def upsert_review(self, pr: int, **fields) -> None:
