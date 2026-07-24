@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sentinel — compliance & docs gate</title>
+<style>
+  :root{
+    --bg:#0b0f14; --panel:#121822; --panel2:#0f141d; --line:#1e2733;
+    --ink:#e6edf3; --muted:#8b98a8; --accent:#3fb950; --accentdim:#1f6f34;
+    --crit:#f85149; --high:#ff7b72; --med:#d29922; --low:#58a6ff; --info:#6e7681;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  header{display:flex;align-items:center;gap:14px;padding:14px 20px;border-bottom:1px solid var(--line);background:var(--panel2)}
+  header .logo{width:26px;height:26px;border-radius:6px;background:linear-gradient(135deg,var(--accent),var(--accentdim));display:grid;place-items:center;font-weight:800;color:#04240f}
+  header h1{font-size:16px;margin:0;letter-spacing:.2px}
+  header .target{font-family:var(--mono);color:var(--muted);font-size:12px}
+  header .spacer{flex:1}
+  button{font:inherit;color:var(--ink);background:#1b2430;border:1px solid var(--line);border-radius:8px;padding:7px 12px;cursor:pointer}
+  button.primary{background:var(--accentdim);border-color:var(--accent);color:#eafff0;font-weight:600}
+  button:hover{filter:brightness(1.15)}
+  main{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:14px 20px;max-width:1500px;margin:0 auto}
+  .full{grid-column:1/-1}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
+  .panel h2{font-size:12px;text-transform:uppercase;letter-spacing:.14em;color:var(--muted);margin:0 0 10px}
+  .tiles{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+  .tile{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px}
+  .tile .n{font-size:26px;font-weight:700;font-family:var(--mono)}
+  .tile .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.08em}
+  .pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:11px;font-family:var(--mono);border:1px solid var(--line)}
+  .running{color:var(--low);border-color:#213b57}.done{color:var(--accent);border-color:var(--accentdim)}
+  .blocked{color:var(--med);border-color:#4a3c12}.pending{color:var(--med)}.success{color:var(--accent)}.failure{color:var(--crit)}
+  .sev-critical{color:var(--crit)}.sev-high{color:var(--high)}.sev-medium{color:var(--med)}.sev-low{color:var(--low)}.sev-info{color:var(--info)}
+  a{color:var(--low);text-decoration:none}a:hover{text-decoration:underline}
+  .bar{height:8px;border-radius:6px;background:#20293a;overflow:hidden;display:flex}
+  .bar i{display:block;height:100%}
+  .kanban{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  .col h3{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:0 0 8px}
+  .card{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:8px;font-size:12px}
+  .card .c{font-family:var(--mono);color:var(--muted);font-size:11px}
+  #chatlog{height:220px;overflow:auto;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px;font-size:13px}
+  .msg{margin-bottom:8px}.msg .who{font-family:var(--mono);font-size:11px;color:var(--muted)}
+  .msg.user .who{color:var(--low)}.msg.sentinel .who{color:var(--accent)}
+  .row{display:flex;gap:8px;margin-top:8px}.row input{flex:1;background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:8px}
+  .muted{color:var(--muted)}.mono{font-family:var(--mono)}
+  .plan{font-size:12px;color:var(--muted);max-width:340px;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">S</div>
+  <div><h1>Sentinel</h1><div class="target" id="target">…</div></div>
+  <div class="spacer"></div>
+  <span class="muted mono" id="ghmode"></span>
+  <button class="primary" onclick="runDemo()">▶ Run Demo</button>
+  <button onclick="load()">↻ Refresh</button>
+</header>
+
+<main>
+  <section class="panel full">
+    <h2>Continuous-compliance posture</h2>
+    <div class="tiles" id="tiles"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Devin instances · PRs in flight</h2>
+    <table id="reviews"><thead><tr><th>PR</th><th>Session</th><th>Phase</th><th>Check</th><th>Proxy CI</th><th>Plan / insight</th></tr></thead><tbody></tbody></table>
+  </section>
+
+  <section class="panel">
+    <h2>Findings by control &amp; severity (POA&amp;M burn-down)</h2>
+    <div id="controls"></div>
+  </section>
+
+  <section class="panel full">
+    <h2>Compliance ticket board</h2>
+    <div class="kanban" id="kanban"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Talk to the Sentinel orchestrator</h2>
+    <div id="chatlog"></div>
+    <div class="row">
+      <input id="chatin" placeholder="Ask for status, or steer a session (prefix: @<session_id> …)" onkeydown="if(event.key==='Enter')send()"/>
+      <button class="primary" onclick="send()">Send</button>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Event timeline</h2>
+    <table id="events"><thead><tr><th>When</th><th>Kind</th><th>Detail</th></tr></thead><tbody></tbody></table>
+  </section>
+</main>
+
+<script>
+const API = location.origin;
+const SEV = ["critical","high","medium","low","info"];
+const sevColor = {critical:"#f85149",high:"#ff7b72",medium:"#d29922",low:"#58a6ff",info:"#6e7681"};
+const el = id => document.getElementById(id);
+const fmtAgo = t => { const s=Math.max(0,(Date.now()/1000)-t); return s<60?`${s|0}s`:s<3600?`${s/60|0}m`:`${s/3600|0}h`; };
+const pill = (c,txt)=>`<span class="pill ${c}">${txt||c}</span>`;
+
+async function load(){
+  const s = await (await fetch(API+"/api/state")).json();
+  el("target").textContent = s.target;
+  const m = s.metrics;
+  el("tiles").innerHTML = [
+    ["PR reviews", m.reviews],["Active", m.active],["Open findings", m.findings_open],
+    ["Remediated", m.findings_remediated],["MTTR", m.mttr_seconds==null?"—":(m.mttr_seconds/60).toFixed(1)+"m"]
+  ].map(([l,n])=>`<div class="tile"><div class="n">${n}</div><div class="l">${l}</div></div>`).join("");
+
+  el("reviews").querySelector("tbody").innerHTML = s.reviews.map(r=>{
+    const proxyCi = (r.structured&&r.structured.proxy_ci)||"—";
+    return `<tr>
+      <td><a href="https://github.com/${r.repo}/pull/${r.pr}" target="_blank">#${r.pr}</a><div class="muted mono" style="font-size:11px">${(r.title||"").slice(0,40)}</div></td>
+      <td>${r.session_url?`<a href="${r.session_url}" target="_blank" class="mono">${(r.session_id||"").slice(0,14)}</a>`:'<span class="muted">—</span>'}</td>
+      <td>${pill(r.phase||"running")}</td>
+      <td>${pill(r.check_state||"pending")}</td>
+      <td>${pill(proxyCi==="—"?"pending":proxyCi, proxyCi)}</td>
+      <td class="plan">${(r.plan||"").slice(0,180)||'<span class="muted">…</span>'}</td>
+    </tr>`;}).join("") || `<tr><td colspan=6 class="muted">No PRs yet — click <b>Run Demo</b>.</td></tr>`;
+
+  // findings by control, stacked by severity
+  const byCtrl={};
+  s.findings.forEach(f=>{ (byCtrl[f.control]=byCtrl[f.control]||{}); byCtrl[f.control][f.severity]=(byCtrl[f.control][f.severity]||0)+1; });
+  el("controls").innerHTML = Object.keys(byCtrl).length? Object.entries(byCtrl).map(([c,sv])=>{
+    const tot=Object.values(sv).reduce((a,b)=>a+b,0);
+    const seg=SEV.filter(x=>sv[x]).map(x=>`<i style="width:${100*sv[x]/tot}%;background:${sevColor[x]}"></i>`).join("");
+    return `<div style="margin-bottom:9px"><div style="display:flex;justify-content:space-between;font-size:12px"><span class="mono">${c}</span><span class="muted">${tot}</span></div><div class="bar">${seg}</div></div>`;
+  }).join("") : `<div class="muted">No findings yet.</div>`;
+
+  // kanban from tickets
+  const cols={open:"Open","in remediation":"In Remediation",remediated:"Remediated","accepted-risk":"Accepted-Risk"};
+  el("kanban").innerHTML = Object.entries(cols).map(([k,label])=>{
+    const cards = s.tickets.filter(t=>(t.status||"open").toLowerCase().includes(k.split(" ")[0])).map(t=>
+      `<div class="card"><div>${t.title}</div><div class="c">${t.id} · ${pill("","")} <span class="sev-${t.severity}">${t.severity}</span> · ${t.control}</div></div>`).join("");
+    return `<div class="col"><h3>${label}</h3>${cards||'<div class="muted" style="font-size:12px">—</div>'}</div>`;
+  }).join("");
+
+  el("events").querySelector("tbody").innerHTML = s.events.slice(0,12).map(e=>
+    `<tr><td class="muted mono">${fmtAgo(e.ts)}</td><td class="mono">${e.kind}</td><td>${e.detail}</td></tr>`).join("");
+
+  el("chatlog").innerHTML = s.chat.map(c=>`<div class="msg ${c.role}"><span class="who">${c.role}</span> ${c.content}</div>`).join("");
+  el("chatlog").scrollTop = 1e9;
+  el("ghmode").textContent = "";
+}
+
+async function runDemo(){
+  const pr = prompt("PR number to review (blank = synthetic demo):","");
+  const body = pr? {pr:parseInt(pr)} : {};
+  await fetch(API+"/api/demo/run",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});
+  setTimeout(load,600);
+}
+async function send(){
+  const inp=el("chatin"); const raw=inp.value.trim(); if(!raw) return; inp.value="";
+  let body={message:raw};
+  const m=raw.match(/^@(\S+)\s+([\s\S]+)/); if(m){ body={session_id:m[1],message:m[2]}; }
+  await fetch(API+"/api/chat",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});
+  load();
+}
+load(); setInterval(load, 5000);
+</script>
+</body>
+</html>

@@ -17,6 +17,7 @@ from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from .devin import DevinClient
 from .github_client import GitHubClient
@@ -138,3 +139,7 @@ async def chat(body: dict[str, Any]):
                  f"Target: {REPO}. Ask me to steer a session by passing its session_id.")
     store.add_chat("sentinel", reply, session_id)
     return {"reply": reply}
+
+
+# serve the dashboard (single container). Mounted LAST so the /api + /webhook routes win.
+app.mount("/", StaticFiles(directory="static", html=True), name="dashboard")
