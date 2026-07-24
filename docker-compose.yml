@@ -1,0 +1,10 @@
+services:
+  orchestrator:
+    build: ./orchestrator
+    env_file: [.env]
+    ports: ["8080:8080"]
+    volumes: ["./data:/data", "./compliance:/compliance"]
+  dashboard:
+    build: ./dashboard
+    ports: ["8081:8081"]
+    depends_on: [orchestrator]
