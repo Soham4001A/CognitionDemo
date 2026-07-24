@@ -22,8 +22,8 @@ async def poll_loop(store, devin, gh) -> None:
     while True:
         try:
             for r in store.list_reviews():
-                if r.get("phase") == "resolved":
-                    continue  # terminal — check is final
+                if r.get("phase") == "closed":
+                    continue  # main PR merged/closed — nothing left to gate
                 await _tick(store, devin, gh, r)
         except Exception as e:
             store.log("error", f"poller: {e}")
@@ -31,32 +31,36 @@ async def poll_loop(store, devin, gh) -> None:
 
 
 async def _tick(store, devin, gh, r: dict[str, Any]) -> None:
-    sid, pr = r.get("session_id"), r["pr"]
-    if not sid:
-        return
-    s = await asyncio.to_thread(devin.get_session, sid)
-    phase = devin.phase(s.get("status_enum"))
-    structured = s.get("structured_output") or {}
-    fields: dict[str, Any] = {"phase": phase}
+    pr = r["pr"]
+    sid = r.get("session_id")
+    fields: dict[str, Any] = {}
+    # Once the gate is decided we stop polling Devin but keep re-pinning the check to the live head
+    # (until the main PR closes), so don't early-return on a resolved review.
+    decided_already = r.get("phase") == "resolved"
+    phase = r.get("phase")
 
-    plan = _plan_text(s)
-    if plan:
-        fields["plan"] = plan
-    if structured:
-        fields["structured"] = structured
-        for i, f in enumerate(structured.get("findings") or []):
-            store.add_findings(pr, [{
-                "id": f.get("id", f"F{i}"), "scanner": f.get("scanner"), "control": f.get("control"),
-                "severity": f.get("severity", "medium"), "message": f.get("message", ""),
-                "fixable": f.get("fixed") is not None,
-                "status": "remediated" if f.get("fixed") else "open",
-            }])
-        if structured.get("proxy_pr") and not r.get("proxy_pr"):
-            fields["proxy_pr"] = _pr_number(structured["proxy_pr"])
+    if sid and not decided_already:
+        s = await asyncio.to_thread(devin.get_session, sid)
+        phase = devin.phase(s.get("status_enum"))
+        fields["phase"] = phase
+        plan = _plan_text(s)
+        if plan:
+            fields["plan"] = plan
+        structured = s.get("structured_output") or {}
+        if structured:
+            fields["structured"] = structured
+            for i, f in enumerate(structured.get("findings") or []):
+                store.add_findings(pr, [{
+                    "id": f.get("id", f"F{i}"), "scanner": f.get("scanner"), "control": f.get("control"),
+                    "severity": f.get("severity", "medium"), "message": f.get("message", ""),
+                    "fixable": f.get("fixed") is not None,
+                    "status": "remediated" if f.get("fixed") else "open",
+                }])
+            if structured.get("proxy_pr") and not r.get("proxy_pr"):
+                fields["proxy_pr"] = _pr_number(structured["proxy_pr"])
 
-    # Proxy-PR detection independent of structured_output: Devin only writes structured output at
-    # the very end (session may sit in working/blocked with the proxy PR already open). Detect it by
-    # its branch so the gate can advance to "awaiting approval" the moment the PR exists.
+    # Proxy-PR detection independent of structured_output: Devin only writes structured output at the
+    # very end. Detect it by its branch so the gate advances the moment the PR exists.
     proxy = fields.get("proxy_pr") or r.get("proxy_pr")
     if not proxy and gh:
         found = await asyncio.to_thread(gh.find_open_pr_by_head, f"sentinel/compliance-{pr}")
@@ -65,32 +69,38 @@ async def _tick(store, devin, gh, r: dict[str, Any]) -> None:
             fields["proxy_pr"] = found
             store.log("proxy", f"detected proxy PR #{found} for PR #{pr}", pr)
 
-    # Keep the required check pinned to the LIVE head sha. Devin's docs auto-commit advances the
-    # feature branch, which strands a status set on the prior sha — re-pin so the gate stays on the
-    # actually-mergeable commit.
+    # One call for the main PR: its live head (re-pin target) AND whether it has closed (terminal).
     head_sha = r.get("head_sha")
+    main_closed = False
     if gh:
-        live_sha = await asyncio.to_thread(gh.pr_head_sha, pr)
-        if live_sha and live_sha != head_sha:
-            store.log("head", f"PR #{pr} head advanced {(head_sha or '')[:8]}→{live_sha[:8]} — re-pinning check", pr)
-            head_sha = live_sha
-            fields["head_sha"] = live_sha
+        try:
+            mp = await asyncio.to_thread(gh.get_pr, pr)
+            live_sha = mp.get("head", {}).get("sha", "")
+            main_closed = mp.get("state") == "closed"
+            if live_sha and live_sha != head_sha:
+                store.log("head", f"PR #{pr} head {(head_sha or '')[:8]}→{live_sha[:8]} — re-pinning check", pr)
+                head_sha = live_sha
+                fields["head_sha"] = live_sha
+        except Exception:
+            pass
 
-    # Review is materially complete once Devin is done OR its proxy PR is open (scan + remediation
-    # landed). Bare `blocked` is ambiguous — Devin may be stuck mid-work asking a question — so it is
-    # NOT a completion signal on its own, or we'd resolve the gate to success prematurely.
-    review_complete = phase == "done" or bool(proxy)
+    review_complete = phase == "done" or bool(proxy) or decided_already
     if review_complete and not r.get("commented"):
         fields["commented"] = time.time()
         store.log("reviewed", f"Devin review of PR #{pr} complete (proxy PR {proxy or 'none'})", pr)
 
-    if review_complete or r.get("commented"):
-        state, desc, resolved = await _gate(gh, proxy)
+    if review_complete:
+        state, desc, decided = await _gate(gh, proxy)
         fields["check_state"] = state
-        if resolved:
+        # 'resolved' = gate decided (for display). But keep re-pinning to the newest head until the
+        # MAIN PR closes: a squash-merge of the proxy makes a fresh head commit that must ALSO carry
+        # devin/compliance, or branch protection would block the main PR on an unstamped commit.
+        if decided:
             fields["phase"] = "resolved"
-        # Only write the status when it actually changed — the poll loop runs every 15s and would
-        # otherwise spam the PR's status history with identical rows (noise in the audit trail).
+        if main_closed:
+            fields["phase"] = "closed"
+        # Idempotent write — only touch GitHub when (head, state, desc) changed, so the 15s loop
+        # doesn't spam the PR's status history (audit-trail noise).
         sig = f"{head_sha}:{state}:{desc}"
         if gh and head_sha and sig != r.get("check_sig"):
             try:
