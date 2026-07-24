@@ -1,0 +1,48 @@
+# Sentinel required compliance check — lives at .github/workflows/compliance.yml on the target fork.
+# This is the REQUIRED merge gate (branch-protection). Sentinel/Devin is what makes it pass:
+# Devin remediates findings via a proxy PR until this goes green. Same suite Devin runs in-container.
+name: compliance
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+
+      # scanner binaries (python ones are pip-installed by run_scans.sh)
+      - name: install scanners
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+          curl -sfL https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz | tar -xz -C /usr/local/bin gitleaks || true
+          sudo curl -sfL https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64 -o /usr/local/bin/hadolint && sudo chmod +x /usr/local/bin/hadolint
+          curl -sfL https://github.com/stackrox/kube-linter/releases/latest/download/kube-linter-linux.tar.gz | tar -xz -C /usr/local/bin kube-linter || true
+
+      - name: run Sentinel compliance suite
+        id: scan
+        run: bash compliance/scanners/run_scans.sh "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE/sentinel-scan"
+
+      - name: publish results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sentinel-compliance
+          path: |
+            sentinel-scan/findings.json
+            sentinel-scan/summary.md
+            sentinel-scan/sbom.cdx.json
+
+      - name: gate summary
+        if: always()
+        run: cat sentinel-scan/summary.md >> "$GITHUB_STEP_SUMMARY" || true
+        # run_scans.sh exits 2 on any high/critical finding → this job fails → the required
+        # check is red until Devin's proxy PR remediates it.
