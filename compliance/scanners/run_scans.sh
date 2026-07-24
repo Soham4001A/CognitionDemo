@@ -48,9 +48,14 @@ else log "trivy unavailable — skipped"; fi
 if have hadolint; then
   log "hadolint (dockerfiles)…"
   : > "$RAW/hadolint.json"
+  # hadolint -f json emits a JSON ARRAY per file; concatenating arrays is invalid JSON, which
+  # silently dropped ALL hadolint findings. Flatten each file's array to ndjson (one object/line)
+  # so normalize.py parses it. (Bug caught by Devin during the first live run.)
   find . -type f \( -name 'Dockerfile' -o -name '*.Dockerfile' -o -name 'Dockerfile.*' \) \
     -not -path '*/node_modules/*' | while read -r df; do
-      hadolint -f json "$df" 2>/dev/null >> "$RAW/hadolint.json" || true
+      hadolint -f json "$df" 2>/dev/null \
+        | python3 -c "import json,sys;[print(json.dumps(o)) for o in (json.load(sys.stdin) or [])]" \
+        2>/dev/null >> "$RAW/hadolint.json" || true
   done
 else log "hadolint unavailable — skipped"; fi
 

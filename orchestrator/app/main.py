@@ -86,9 +86,16 @@ async def github_webhook(request: Request):
     # 1) automatic: a PR is opened
     if event == "pull_request" and payload.get("action") in ("opened", "reopened", "ready_for_review"):
         pr = payload["pull_request"]
+        # BUG A fix — never review our OWN proxy PRs (sentinel/* branch) or Devin-authored PRs,
+        # or we recurse (proxy PR → new review → new proxy PR …) and burn ACU.
+        head_ref = pr["head"]["ref"]
+        author = (pr.get("user") or {}).get("login", "").lower()
+        if head_ref.startswith("sentinel/") or "devin" in author or "sentinel" in author:
+            store.log("skip", f"ignored self/agent PR #{pr['number']} ({head_ref} by {author})", pr["number"])
+            return {"skipped": "self/agent PR", "pr": pr["number"], "head": head_ref}
         return attach_devin(
             pr=pr["number"], title=pr.get("title", ""),
-            base=pr["base"]["ref"], head=pr["head"]["ref"], sha=pr["head"]["sha"],
+            base=pr["base"]["ref"], head=head_ref, sha=pr["head"]["sha"],
         )
     # 2) tagging: someone @-mentions Sentinel/Devin in a PR comment
     if event == "issue_comment" and payload.get("action") == "created":
@@ -119,9 +126,16 @@ async def create_ticket(body: dict[str, Any]):
     control = body.get("control", "RA-5")
     sev = body.get("severity", "medium")
     tid = f"SENT-{pr}-{len(store.list_tickets())+1:03d}"
-    store.add_ticket(tid, pr, body.get("title", "finding"), control, sev, "open",
-                     f"{PUBLIC_URL}/#ticket-{tid}")
-    store.log("ticket", f"{tid} [{control}/{sev}] {body.get('title','')}", pr)
+    title = body.get("title", "finding")
+    store.add_ticket(tid, pr, title, control, sev, "open", f"{PUBLIC_URL}/#ticket-{tid}")
+    # BUG B fix — mirror the ticket into findings so the dashboard burn-down / by-control /
+    # by-severity actually reflect Devin's work (Devin files tickets, not raw findings).
+    store.add_findings(pr, [{
+        "id": tid, "scanner": body.get("scanner", "sentinel"), "control": control,
+        "severity": sev, "message": title, "fixable": body.get("fixed") is not None,
+        "status": "remediated" if body.get("fixed") else "open",
+    }])
+    store.log("ticket", f"{tid} [{control}/{sev}] {title}", pr)
     return {"id": tid}
 
 
