@@ -12,6 +12,7 @@ Devin does the fixing; we observe + gate.
 from __future__ import annotations
 
 import asyncio
+import re
 import time
 from typing import Any
 
@@ -59,6 +60,13 @@ async def _task_tick(store, devin, gh, t: dict[str, Any]) -> None:
                 fields["summary"] = str(so["summary"])[:400]
             if so.get("scanner_evidence"):
                 fields["evidence"] = str(so["scanner_evidence"])[:400]
+
+    # Control chip: Devin often leaves structured_output blank, but the issue title carries the
+    # mapping (e.g. "[CM-6/CM-7] Harden…") — backfill it so every card shows its 800-53 control.
+    if not (fields.get("control") or t.get("control")):
+        cm = re.match(r"\s*\[([^\]]+)\]", t.get("title") or "")
+        if cm:
+            fields["control"] = cm.group(1)
 
     # Detect the remediation PR by its branch, independent of structured_output.
     pr_number = fields.get("pr_number") or t.get("pr_number")
