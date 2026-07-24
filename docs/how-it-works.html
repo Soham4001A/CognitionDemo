@@ -1,0 +1,371 @@
+<title>Sentinel — how the loop works</title>
+<style>
+  :root {
+    --bg: #f4f7fa; --surface: #ffffff; --surface-2: #eef2f7; --line: #d9e1ea;
+    --text: #14202e; --muted: #55697f;
+    --accent: #0c8f9c; --accent-2: #0a707a; --accent-soft: #d7eff1;
+    --ok: #17823b; --ok-soft: #dcefe0; --warn: #a86d05; --warn-soft: #f6ecd2; --crit: #c93a26; --crit-soft: #f6dfd9;
+    --gh: #5a6b80; --devin: #8a5cd6; --human: #17823b;
+    --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --maxw: 940px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0a121b; --surface: #121e2c; --surface-2: #172536; --line: #26374d;
+      --text: #e4ecf5; --muted: #8ba0b8;
+      --accent: #38cdda; --accent-2: #6fe0ea; --accent-soft: #103138;
+      --ok: #46c464; --ok-soft: #13301c; --warn: #e6a821; --warn-soft: #33270a; --crit: #f2604c; --crit-soft: #351712;
+      --gh: #93a6bd; --devin: #b48ef0; --human: #46c464;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0a121b; --surface: #121e2c; --surface-2: #172536; --line: #26374d;
+    --text: #e4ecf5; --muted: #8ba0b8;
+    --accent: #38cdda; --accent-2: #6fe0ea; --accent-soft: #103138;
+    --ok: #46c464; --ok-soft: #13301c; --warn: #e6a821; --warn-soft: #33270a; --crit: #f2604c; --crit-soft: #351712;
+    --gh: #93a6bd; --devin: #b48ef0; --human: #46c464;
+  }
+  :root[data-theme="light"] {
+    --bg: #f4f7fa; --surface: #ffffff; --surface-2: #eef2f7; --line: #d9e1ea;
+    --text: #14202e; --muted: #55697f;
+    --accent: #0c8f9c; --accent-2: #0a707a; --accent-soft: #d7eff1;
+    --ok: #17823b; --ok-soft: #dcefe0; --warn: #a86d05; --warn-soft: #f6ecd2; --crit: #c93a26; --crit-soft: #f6dfd9;
+    --gh: #5a6b80; --devin: #8a5cd6; --human: #17823b;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: var(--font-sans); line-height: 1.55;
+    -webkit-font-smoothing: antialiased; font-size: 16px;
+  }
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 22px; }
+
+  /* ---- typographic system ---- */
+  .eyebrow {
+    font-family: var(--font-mono); font-size: 12px; letter-spacing: .16em;
+    text-transform: uppercase; color: var(--accent); font-weight: 600;
+  }
+  h1 { font-size: clamp(30px, 5.4vw, 46px); line-height: 1.04; letter-spacing: -.02em;
+       margin: .3em 0 .12em; text-wrap: balance; font-weight: 720; }
+  h2 { font-size: clamp(20px, 3vw, 25px); letter-spacing: -.01em; margin: 0 0 4px; text-wrap: balance; }
+  p { margin: 0 0 12px; }
+  .lede { font-size: clamp(17px, 2.2vw, 19px); color: var(--muted); max-width: 60ch; }
+  .mono { font-family: var(--font-mono); }
+  code { font-family: var(--font-mono); font-size: .86em; background: var(--surface-2);
+         border: 1px solid var(--line); border-radius: 5px; padding: .08em .4em; }
+
+  /* ---- header ---- */
+  header { padding: 60px 0 30px; border-bottom: 1px solid var(--line); }
+  .status-strip { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
+  .chip {
+    font-family: var(--font-mono); font-size: 12.5px; padding: 5px 11px; border-radius: 999px;
+    border: 1px solid var(--line); background: var(--surface); display: inline-flex; align-items: center; gap: 7px;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .chip.ok { background: var(--ok-soft); border-color: transparent; color: var(--ok); }
+  .chip.ok .dot { background: var(--ok); }
+  .chip.warn { background: var(--warn-soft); border-color: transparent; color: var(--warn); }
+  .chip.warn .dot { background: var(--warn); }
+  .chip.accent { background: var(--accent-soft); border-color: transparent; color: var(--accent-2); }
+  .chip.accent .dot { background: var(--accent); }
+
+  section { padding: 46px 0; border-bottom: 1px solid var(--line); }
+  .sec-head { margin-bottom: 26px; }
+  .sec-head .eyebrow { display: block; margin-bottom: 8px; }
+  .sec-head p { color: var(--muted); max-width: 62ch; margin: 6px 0 0; }
+
+  /* ---- pipeline ---- */
+  .pipe { display: flex; flex-direction: column; gap: 0; }
+  .step { display: grid; grid-template-columns: 116px 1fr; gap: 20px; position: relative; padding-bottom: 26px; }
+  .step:last-child { padding-bottom: 0; }
+  .rail { display: flex; flex-direction: column; align-items: center; }
+  .num { font-family: var(--font-mono); font-weight: 640; font-size: 15px; width: 34px; height: 34px;
+         border-radius: 9px; display: grid; place-items: center; background: var(--surface); border: 1px solid var(--line);
+         color: var(--accent-2); flex: none; z-index: 1; }
+  .line-down { width: 2px; flex: 1; background: linear-gradient(var(--line), var(--line)); margin: 4px 0; min-height: 14px; }
+  .actor { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase;
+           margin-top: 8px; display: inline-flex; align-items: center; gap: 5px; font-weight: 600; }
+  .actor .dot { width: 7px; height: 7px; }
+  .a-gh { color: var(--gh); } .a-gh .dot { background: var(--gh); }
+  .a-orc { color: var(--accent-2); } .a-orc .dot { background: var(--accent); }
+  .a-devin { color: var(--devin); } .a-devin .dot { background: var(--devin); }
+  .a-human { color: var(--human); } .a-human .dot { background: var(--human); }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 13px; padding: 16px 18px; }
+  .step .card h3 { margin: 0 0 5px; font-size: 16.5px; letter-spacing: -.01em; }
+  .step .card p { margin: 0; color: var(--muted); font-size: 14.5px; }
+  .artifact { margin-top: 11px; font-family: var(--font-mono); font-size: 12.5px; color: var(--text);
+              background: var(--surface-2); border: 1px dashed var(--line); border-radius: 8px; padding: 7px 10px;
+              display: flex; gap: 8px; align-items: baseline; }
+  .artifact b { color: var(--accent-2); font-weight: 600; flex: none; }
+  .step.gate .card { border-color: color-mix(in srgb, var(--human) 45%, var(--line)); }
+
+  /* ---- two devins ---- */
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .panel { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); overflow: hidden; }
+  .panel.native { border-top: 3px solid var(--devin); }
+  .panel.sentinel { border-top: 3px solid var(--accent); }
+  .panel-body { padding: 18px 19px; }
+  .panel .tag { font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+                font-weight: 600; }
+  .panel.native .tag { color: var(--devin); }
+  .panel.sentinel .tag { color: var(--accent-2); }
+  .panel h3 { margin: 8px 0 2px; font-size: 18px; letter-spacing: -.01em; }
+  .quote { font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); background: var(--surface-2);
+           border-left: 2px solid var(--line); border-radius: 0 6px 6px 0; padding: 8px 11px; margin: 12px 0; }
+  .verdict { display: inline-flex; align-items: center; gap: 7px; font-weight: 640; font-size: 14px; margin-top: 4px; }
+  .verdict.no { color: var(--warn); } .verdict.yes { color: var(--ok); }
+  .panel ul { margin: 12px 0 0; padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: 7px; }
+  .panel li { font-size: 14px; color: var(--muted); padding-left: 20px; position: relative; }
+  .panel li::before { content: "→"; position: absolute; left: 0; color: var(--accent); font-family: var(--font-mono); }
+
+  /* ---- matrix ---- */
+  .tbl-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 13px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; min-width: 620px; font-size: 14.5px; }
+  th, td { text-align: left; padding: 12px 15px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  thead th { font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+             color: var(--muted); font-weight: 600; background: var(--surface-2); }
+  tbody tr:last-child td { border-bottom: none; }
+  td.what { font-weight: 600; }
+  td .ctrl { font-family: var(--font-mono); font-size: 12px; color: var(--muted); display: block; margin-top: 2px; }
+  .pill { font-family: var(--font-mono); font-size: 11.5px; font-weight: 600; padding: 3px 9px; border-radius: 999px;
+          white-space: nowrap; }
+  .pill.auto { background: var(--ok-soft); color: var(--ok); }
+  .pill.gate { background: var(--warn-soft); color: var(--warn); }
+  .pill.advise { background: color-mix(in srgb, var(--devin) 16%, transparent); color: var(--devin); }
+
+  /* ---- dashboard split ---- */
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .split .card { padding: 20px; }
+  .split h3 { margin: 0 0 3px; font-size: 17px; }
+  .split .sub { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); text-transform: uppercase;
+                letter-spacing: .07em; }
+  .split ul { margin: 14px 0 0; padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: 9px; }
+  .split li { font-size: 14px; padding-left: 22px; position: relative; color: var(--text); }
+  .split li::before { content: ""; position: absolute; left: 2px; top: 7px; width: 9px; height: 9px; border-radius: 2px;
+                      background: var(--accent); }
+  .split .devin-card li::before { background: var(--devin); }
+  .kicker { margin-top: 20px; font-size: 15px; color: var(--muted); }
+  .kicker b { color: var(--text); font-weight: 640; }
+
+  footer { padding: 34px 0 60px; color: var(--muted); font-size: 13.5px; font-family: var(--font-mono); }
+
+  @media (max-width: 680px) {
+    .two, .split { grid-template-columns: 1fr; }
+    .step { grid-template-columns: 92px 1fr; gap: 14px; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .step .card, .panel, .split .card { transition: border-color .2s ease; }
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">Compliance control plane · Devin API</span>
+    <h1>Sentinel: Devin as a required gate on every PR</h1>
+    <p class="lede">A normal contributor opens a PR. Sentinel attaches Devin as a required reviewer that
+      fixes docs, runs a control-mapped compliance scan, remediates security findings behind a human-approved
+      PR, and blocks merge until the gate is green — with an audit trail.</p>
+    <div class="status-strip">
+      <span class="chip accent"><span class="dot"></span>PR&nbsp;#3 · demo/sentinel-showcase</span>
+      <span class="chip ok"><span class="dot"></span>devin/compliance = success</span>
+      <span class="chip ok"><span class="dot"></span>proxy PR #4 merged</span>
+      <span class="chip accent"><span class="dot"></span>branch protection: required</span>
+    </div>
+  </header>
+
+  <!-- ============ THE LOOP ============ -->
+  <section>
+    <div class="sec-head">
+      <span class="eyebrow">The loop, end to end</span>
+      <h2>Six steps from “PR opened” to “merge unblocked”</h2>
+      <p>The orchestrator does zero engineering — it routes events and drives the gate. <b>Devin</b> does all
+        the work, in its own container. A <b>human</b> approves the one thing that touches security.</p>
+    </div>
+
+    <div class="pipe">
+      <div class="step">
+        <div class="rail"><div class="num">1</div><div class="line-down"></div>
+          <span class="actor a-gh"><span class="dot"></span>GitHub</span></div>
+        <div class="card">
+          <h3>A PR is opened</h3>
+          <p>GitHub fires <code>pull_request.opened</code> through a tunnel to the orchestrator. It first
+            <b>guards against itself</b> — any <code>sentinel/*</code> branch or Devin-authored PR is skipped, so the loop can’t recurse.</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="rail"><div class="num">2</div><div class="line-down"></div>
+          <span class="actor a-orc"><span class="dot"></span>Orchestrator</span></div>
+        <div class="card">
+          <h3>Set the gate, dispatch Devin</h3>
+          <p>The orchestrator sets the required check to pending and starts a Devin session, handing it the
+            playbook as its job description.</p>
+          <div class="artifact"><b>gate →</b><span>devin/compliance = <span style="color:var(--warn)">pending</span> · “Sentinel reviewing”</span></div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="rail"><div class="num">3</div><div class="line-down"></div>
+          <span class="actor a-devin"><span class="dot"></span>Devin</span></div>
+        <div class="card">
+          <h3>Fix the docs — on the branch, no gate</h3>
+          <p>Devin clones the diff, checks docs against it, rewrites drift, and <b>commits straight to the
+            feature branch</b>. Docs are low-risk, so they need no human approval.</p>
+          <div class="artifact"><b>commit →</b><span>docs: sync documentation for PR #3</span></div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="rail"><div class="num">4</div><div class="line-down"></div>
+          <span class="actor a-devin"><span class="dot"></span>Devin</span></div>
+        <div class="card">
+          <h3>Scan, then remediate behind a proxy PR</h3>
+          <p>Devin runs the 8-scanner suite, maps every finding to an 800-53 control, fixes what’s fixable,
+            and opens a <b>separate proxy PR</b> with those changes — files tickets and appends POA&amp;M rows along the way.</p>
+          <div class="artifact"><b>proxy →</b><span>PR #4 · sentinel/compliance-3 (Dockerfile hardening, license headers)</span></div>
+        </div>
+      </div>
+
+      <div class="step gate">
+        <div class="rail"><div class="num">5</div><div class="line-down"></div>
+          <span class="actor a-human"><span class="dot"></span>Human</span></div>
+        <div class="card">
+          <h3>A human approves the security fix</h3>
+          <p>The proxy PR is the one place a person is in the loop — federal change-control. Merge it and the
+            fix lands on the branch; the gate reflects your decision.</p>
+          <div class="artifact"><b>gate →</b><span>devin/compliance = <span style="color:var(--warn)">pending</span> · “awaiting proxy PR #4 approval”</span></div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="rail"><div class="num">6</div>
+          <span class="actor a-orc"><span class="dot"></span>Orchestrator</span></div>
+        <div class="card">
+          <h3>Gate flips — merge unblocked</h3>
+          <p>The poller sees the proxy merged, re-pins the check to the PR’s live head, and turns it green.
+            Because <code>devin/compliance</code> is a required check, the PR couldn’t have merged until this moment.</p>
+          <div class="artifact"><b>gate →</b><span>devin/compliance = <span style="color:var(--ok)">success</span> · “remediations merged (proxy PR #4)”</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ TWO DEVINS ============ -->
+  <section>
+    <div class="sec-head">
+      <span class="eyebrow">The part that looks confusing</span>
+      <h2>Two different Devins are commenting on your PR</h2>
+      <p>You saw a “Devin Review” comment and asked why its findings weren’t auto-fixed. That’s because it
+        isn’t Sentinel — it’s Devin’s built-in reviewer, which only advises. Here’s the difference on PR&nbsp;#3.</p>
+    </div>
+
+    <div class="two">
+      <div class="panel native">
+        <div class="panel-body">
+          <span class="tag">Devin’s native reviewer</span>
+          <h3>“Devin Review found 5 potential issues”</h3>
+          <div class="quote">app.devin.ai/review · a formal PR review, posted automatically on every PR</div>
+          <div class="verdict no"><span class="dot" style="width:8px;height:8px;border-radius:50%;background:var(--warn)"></span>Advisory only — nothing is auto-fixed</div>
+          <ul>
+            <li>Built-in Devin feature, independent of our integration</li>
+            <li>Leaves code-quality comments, like a human reviewer would</li>
+            <li>Acts on nothing — no commits, no PRs</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="panel sentinel">
+        <div class="panel-body">
+          <span class="tag">Sentinel (our flow)</span>
+          <h3>“Sentinel compliance review — PR #3”</h3>
+          <div class="quote">an issue comment from playbook.py · docs fixed here, 6 findings remediated in a proxy PR</div>
+          <div class="verdict yes"><span class="dot" style="width:8px;height:8px;border-radius:50%;background:var(--ok)"></span>Actually remediates</div>
+          <ul>
+            <li>Docs drift committed to the branch</li>
+            <li>demo.Dockerfile hardened (+28 / −6)</li>
+            <li>Apache license headers added to normalize.py (+194 / −52)</li>
+            <li>Delivered as proxy PR #4 — merged after your approval</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ MATRIX ============ -->
+  <section>
+    <div class="sec-head">
+      <span class="eyebrow">The mental model</span>
+      <h2>What gets fixed, what gets flagged</h2>
+      <p>Sentinel routes each finding by risk. That routing is the whole design — not everything should be
+        auto-applied, and not everything needs a human.</p>
+    </div>
+    <div class="tbl-scroll">
+      <table>
+        <thead>
+          <tr><th>Finding type</th><th>What Sentinel does</th><th style="width:150px">Human?</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="what">Docs drift<span class="ctrl">CM-2 · CM-3 · SA-5</span></td>
+            <td>Rewritten and committed to the feature branch directly</td>
+            <td><span class="pill auto">Auto-applied</span></td>
+          </tr>
+          <tr>
+            <td class="what">Fixable security / hardening<span class="ctrl">RA-5 · CM-6 · IA-5 · SA-11</span></td>
+            <td>Fixed in a separate proxy PR you review and merge</td>
+            <td><span class="pill gate">Approval gate</span></td>
+          </tr>
+          <tr>
+            <td class="what">Findings needing judgment<span class="ctrl">SA-11 · SR-3</span></td>
+            <td>Filed as a ticket + a POA&amp;M row mapped to its control</td>
+            <td><span class="pill gate">Tracked, you decide</span></td>
+          </tr>
+          <tr>
+            <td class="what">Code-quality notes<span class="ctrl">Devin native review</span></td>
+            <td>Left as advisory comments — Sentinel doesn’t touch them</td>
+            <td><span class="pill advise">Advisory</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============ DASHBOARD SPLIT ============ -->
+  <section style="border-bottom:none">
+    <div class="sec-head">
+      <span class="eyebrow">Your question: why not just use Devin’s dashboard?</span>
+      <h2>Two dashboards, two jobs</h2>
+      <p>They don’t compete. Devin’s dashboard is the best view of one session’s inner work — so Sentinel
+        links out to it rather than rebuilding it. Sentinel’s dashboard is the thing Devin’s can’t be: the
+        fleet-and-compliance posture a VP or ISSO signs off on.</p>
+    </div>
+    <div class="split">
+      <div class="card devin-card">
+        <span class="sub">Use Devin’s for</span>
+        <h3>One session, up close</h3>
+        <ul>
+          <li>The live plan and terminal</li>
+          <li>Files Devin touched, step by step</li>
+          <li>Steering a single run</li>
+        </ul>
+      </div>
+      <div class="card">
+        <span class="sub">Sentinel owns</span>
+        <h3>The fleet &amp; the audit</h3>
+        <ul>
+          <li>Every PR’s gate state at a glance</li>
+          <li>Findings rolled up by 800-53 control</li>
+          <li>POA&amp;M / SSP burn-down + MTTR</li>
+          <li>The ticket board and event trail</li>
+        </ul>
+      </div>
+    </div>
+    <p class="kicker"><b>The division of labor:</b> Sentinel is the compliance cockpit and deep-links into
+      Devin for any single-session drill-down. We don’t reproduce Devin’s session view — we surface the one
+      thing it was never meant to show: whether the whole program is in control.</p>
+  </section>
+
+  <footer>Sentinel · Devin API integration · target repo Soham4001A/superset-cognition-demo</footer>
+</div>
