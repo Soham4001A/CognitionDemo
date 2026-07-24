@@ -28,6 +28,11 @@ CREATE TABLE IF NOT EXISTS tickets (
   id TEXT PRIMARY KEY, pr INTEGER, title TEXT, control TEXT, severity TEXT,
   status TEXT, link TEXT, created REAL
 );
+CREATE TABLE IF NOT EXISTS tasks (
+  issue INTEGER PRIMARY KEY, title TEXT, control TEXT, severity TEXT, session_id TEXT,
+  session_url TEXT, phase TEXT, pr_number INTEGER, check_state TEXT, check_sig TEXT,
+  created REAL, updated REAL, resolved REAL
+);
 CREATE TABLE IF NOT EXISTS chat (
   id INTEGER PRIMARY KEY AUTOINCREMENT, role TEXT, content TEXT, session_id TEXT, ts REAL
 );
@@ -114,6 +119,27 @@ class Store:
     def list_tickets(self) -> list[dict[str, Any]]:
         return [dict(r) for r in self.db.execute("SELECT * FROM tickets ORDER BY created DESC").fetchall()]
 
+    # ---- issue-remediation tasks (issue -> Devin session -> PR that Closes #issue) ----
+    def upsert_task(self, issue: int, **fields) -> None:
+        fields.setdefault("updated", time.time())
+        cur = self.db.execute("SELECT issue FROM tasks WHERE issue=?", (issue,))
+        if cur.fetchone() is None:
+            fields.setdefault("created", time.time())
+            cols = ",".join(["issue", *fields])
+            qs = ",".join(["?"] * (1 + len(fields)))
+            self.db.execute(f"INSERT INTO tasks ({cols}) VALUES ({qs})", (issue, *fields.values()))
+        else:
+            sets = ",".join(f"{k}=?" for k in fields)
+            self.db.execute(f"UPDATE tasks SET {sets} WHERE issue=?", (*fields.values(), issue))
+        self.db.commit()
+
+    def get_task(self, issue: int) -> dict[str, Any] | None:
+        r = self.db.execute("SELECT * FROM tasks WHERE issue=?", (issue,)).fetchone()
+        return dict(r) if r else None
+
+    def list_tasks(self) -> list[dict[str, Any]]:
+        return [dict(r) for r in self.db.execute("SELECT * FROM tasks ORDER BY updated DESC").fetchall()]
+
     # ---- chat / events ----
     def add_chat(self, role: str, content: str, session_id: str | None = None) -> None:
         self.db.execute("INSERT INTO chat (role,content,session_id,ts) VALUES (?,?,?,?)",
@@ -136,17 +162,26 @@ class Store:
     # ---- dashboard metrics ----
     def metrics(self) -> dict[str, Any]:
         reviews = self.list_reviews()
+        tasks = self.list_tasks()
         findings = self.list_findings()
         remediated = [f for f in findings if f["status"] in ("remediated", "fixed")]
         mttrs = []
         for r in reviews:
             if r.get("commented") and r.get("created"):
                 mttrs.append(r["commented"] - r["created"])
+        # issue-remediation MTTR: dispatch -> issue resolved (PR merged/closed)
+        for t in tasks:
+            if t.get("resolved") and t.get("created"):
+                mttrs.append(t["resolved"] - t["created"])
         return {
             "reviews": len(reviews),
-            "active": sum(1 for r in reviews if r.get("phase") == "running"),
+            "active": sum(1 for r in reviews if r.get("phase") == "running")
+            + sum(1 for t in tasks if t.get("phase") not in ("resolved", "closed", None)),
             "findings_open": sum(1 for f in findings if f["status"] == "open"),
             "findings_remediated": len(remediated),
+            "issues_total": len(tasks),
+            "issues_open": sum(1 for t in tasks if t.get("phase") not in ("resolved", "closed")),
+            "issues_remediated": sum(1 for t in tasks if t.get("phase") in ("resolved", "closed")),
             "by_control": _count(findings, "control"),
             "by_severity": _count(findings, "severity"),
             "mttr_seconds": round(sum(mttrs) / len(mttrs), 1) if mttrs else None,

@@ -58,6 +58,17 @@ class GitHubClient:
         except Exception:
             return None
 
+    def get_issue(self, number: int) -> dict[str, Any]:
+        return self._r("GET", f"/repos/{self.owner}/{self.name}/issues/{number}")
+
+    def create_issue(self, title: str, body: str, labels: list[str] | None = None) -> dict[str, Any]:
+        return self._r("POST", f"/repos/{self.owner}/{self.name}/issues",
+                       json={"title": title, "body": body, "labels": labels or []})
+
+    def comment_issue(self, number: int, body: str) -> dict[str, Any]:
+        return self._r("POST", f"/repos/{self.owner}/{self.name}/issues/{number}/comments",
+                       json={"body": body})
+
     def set_required_check(self, sha: str, state: str, description: str, target_url: str = "") -> None:
         """state ∈ pending|success|failure|error. Set the `devin/compliance` commit status —
         make this context a required check in branch protection to gate merges."""

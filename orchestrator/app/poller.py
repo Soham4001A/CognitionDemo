@@ -25,9 +25,73 @@ async def poll_loop(store, devin, gh) -> None:
                 if r.get("phase") == "closed":
                     continue  # main PR merged/closed — nothing left to gate
                 await _tick(store, devin, gh, r)
+            for t in store.list_tasks():
+                if t.get("phase") in ("resolved", "closed"):
+                    continue  # issue remediated + closed — terminal
+                await _task_tick(store, devin, gh, t)
         except Exception as e:
             store.log("error", f"poller: {e}")
         await asyncio.sleep(POLL_SECS)
+
+
+async def _task_tick(store, devin, gh, t: dict[str, Any]) -> None:
+    """Track one issue-remediation task: Devin session -> remediation PR -> issue closed."""
+    issue = t["issue"]
+    sid = t.get("session_id")
+    fields: dict[str, Any] = {}
+    phase = t.get("phase")
+    fixed = False
+
+    if sid:
+        s = await asyncio.to_thread(devin.get_session, sid)
+        phase = devin.phase(s.get("status_enum"))
+        fields["phase"] = phase
+        so = s.get("structured_output") or {}
+        if so:
+            fixed = bool(so.get("fixed"))
+            if so.get("control") and not t.get("control"):
+                fields["control"] = so["control"]
+            if so.get("severity") and not t.get("severity"):
+                fields["severity"] = so["severity"]
+            if so.get("pr") and not t.get("pr_number"):
+                fields["pr_number"] = _pr_number(so["pr"])
+
+    # Detect the remediation PR by its branch, independent of structured_output.
+    pr_number = fields.get("pr_number") or t.get("pr_number")
+    if not pr_number and gh:
+        found = await asyncio.to_thread(gh.find_open_pr_by_head, f"sentinel/issue-{issue}")
+        if found:
+            pr_number = found
+            fields["pr_number"] = found
+            store.log("remediate", f"issue #{issue}: remediation PR #{found} opened", issue)
+
+    if pr_number and gh:
+        # Stamp devin/compliance on the remediation PR (Devin's own vetted fix) so it can merge under
+        # branch protection: pending while Devin works, success once the fix is in and reviewable.
+        ready = phase == "done" or fixed
+        state = "success" if ready else "pending"
+        desc = (f"Sentinel remediation for issue #{issue} — ready for review" if ready
+                else f"Sentinel remediating issue #{issue}…")
+        try:
+            head = await asyncio.to_thread(gh.pr_head_sha, pr_number)
+            sig = f"{head}:{state}:{desc}"
+            if head and sig != t.get("check_sig"):
+                await asyncio.to_thread(gh.set_required_check, head, state, desc, t.get("session_url", ""))
+                fields["check_sig"] = sig
+                fields["check_state"] = state
+        except Exception as e:
+            store.log("warn", f"task #{issue} set check failed: {e}", issue)
+        # Issue closes when a human merges the PR (body says `Closes #issue`) — that's remediation done.
+        try:
+            iss = await asyncio.to_thread(gh.get_issue, issue)
+            if iss.get("state") == "closed":
+                fields["phase"] = "resolved"
+                fields["resolved"] = time.time()
+                store.log("resolved", f"issue #{issue} remediated + closed (PR #{pr_number})", issue)
+        except Exception:
+            pass
+
+    store.upsert_task(issue, **fields)
 
 
 async def _tick(store, devin, gh, r: dict[str, Any]) -> None:

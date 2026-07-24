@@ -22,11 +22,14 @@ from fastapi.staticfiles import StaticFiles
 
 from .devin import DevinClient
 from .github_client import GitHubClient
-from .playbook import build_playbook
+from .playbook import build_playbook, build_remediation_playbook
 from .poller import poll_loop
 from .state import Store
 
+REMEDIATE_LABEL = "sentinel:remediate"
+
 REPO = os.environ.get("TARGET_REPO", "Soham4001A/superset-cognition-demo")
+REPO_DEFAULT_BASE = os.environ.get("TARGET_BASE", "master")
 PUBLIC_URL = os.environ.get("PUBLIC_URL", "http://localhost:8080")
 
 app = FastAPI(title="Sentinel Orchestrator")
@@ -79,6 +82,28 @@ def attach_by_number(pr_number: int) -> dict[str, Any]:
                         p["head"]["sha"])
 
 
+def dispatch_remediation(issue: int, title: str, body: str, base: str = "master") -> dict[str, Any]:
+    """Issue-triggered loop: a filed issue -> a Devin session that fixes it and opens a PR that
+    `Closes #issue`. Records a task the poller tracks through to the issue being closed."""
+    if store.get_task(issue) and store.get_task(issue).get("phase") not in (None, "error"):
+        return {"skipped": "already dispatched", "issue": issue}
+    prompt = build_remediation_playbook({
+        "repo": REPO, "issue": issue, "title": title, "body": body, "base": base,
+        "board_api": f"{PUBLIC_URL}/api/tickets",
+    })
+    session = devin.create_session(prompt, title=f"Sentinel · remediate #{issue} · {REPO}",
+                                   tags=["sentinel", "remediation", f"issue-{issue}"])
+    sid = session.get("session_id")
+    store.upsert_task(issue, title=title, session_id=sid, session_url=session.get("url"),
+                      phase="running")
+    store.log("remediate", f"Devin session {sid} dispatched to fix issue #{issue}", issue)
+    return {"issue": issue, "session_id": sid, "session_url": session.get("url")}
+
+
+def _has_remediate_label(issue: dict[str, Any]) -> bool:
+    return any((lbl.get("name") == REMEDIATE_LABEL) for lbl in (issue.get("labels") or []))
+
+
 @app.post("/webhook/github")
 async def github_webhook(request: Request):
     event = request.headers.get("X-GitHub-Event", "")
@@ -97,6 +122,13 @@ async def github_webhook(request: Request):
             pr=pr["number"], title=pr.get("title", ""),
             base=pr["base"]["ref"], head=head_ref, sha=pr["head"]["sha"],
         )
+    # 1b) automatic: an issue is filed/labeled for remediation (the Part-1 loop)
+    if event == "issues" and payload.get("action") in ("opened", "labeled", "reopened"):
+        issue = payload.get("issue") or {}
+        if issue.get("number") and _has_remediate_label(issue):
+            return dispatch_remediation(issue["number"], issue.get("title", ""),
+                                        issue.get("body") or "", REPO_DEFAULT_BASE)
+        return {"ignored": "issue without sentinel:remediate label", "issue": issue.get("number")}
     # 2) tagging: someone @-mentions Sentinel/Devin in a PR comment
     if event == "issue_comment" and payload.get("action") == "created":
         body = ((payload.get("comment") or {}).get("body") or "").lower()
@@ -139,11 +171,24 @@ async def create_ticket(body: dict[str, Any]):
     return {"id": tid}
 
 
+@app.post("/api/demo/remediate")
+async def demo_remediate(body: dict[str, Any]):
+    """One-click issue-remediation demo. Give an existing issue number (reads it from GitHub) or a
+    title+body to synthesize one; dispatches a Devin remediation session either way."""
+    issue = int(body.get("issue", 0))
+    if gh and issue:
+        i = gh.get_issue(issue)
+        return dispatch_remediation(issue, i.get("title", ""), i.get("body") or "", REPO_DEFAULT_BASE)
+    return dispatch_remediation(issue or 1, body.get("title", "demo issue"),
+                                body.get("body", ""), REPO_DEFAULT_BASE)
+
+
 @app.get("/api/state")
 def state():
     return {
         "target": REPO,
         "reviews": store.list_reviews(),
+        "tasks": store.list_tasks(),
         "findings": store.list_findings(),
         "tickets": store.list_tickets(),
         "events": store.list_events(),
