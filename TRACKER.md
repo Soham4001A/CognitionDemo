@@ -7,20 +7,21 @@ The engineering-notebook for this build (the Nexus discipline Sentinel productiz
 | Phase | Atom | Status |
 |---|---|---|
 | 0 Setup | fork, keys, deploy key, Devin verified, repo live | ✅ done |
-| 1 Compliance baseline | `compliance/SSP.md` + `POAM.md` seeds (on fork) | ⏳ in progress |
-| 1 | scanner suite `compliance/scanners/` + `run_scans.sh` (8 static scanners) | ⏳ |
-| 1 | `.github/workflows/compliance.yml` on fork (required-check surface) | ⏳ |
-| 2 Orchestrator | `devin.py` (create/get/list/message) | ⬜ |
-| 2 | `github_client.py` (checks, comments, CI read, proxy PR) | ⬜ |
-| 2 | `state.py` (SQLite) + `poller.py` (session + CI poll loop) | ⬜ |
-| 2 | `main.py` webhook → playbook → session → required-check | ⬜ |
-| 3 Playbook | finalize `playbook.py` (docs + scan + proxy-PR + comment + ticket + POA&M) | ⬜ |
-| 4 Dashboard | instances · PRs+CI · findings/POA&M burn-down · plans | ⬜ |
+| 1 Compliance baseline | `SSP.md` + `POAM.md` seeds (fork + solution) | ✅ done |
+| 1 | scanner suite `run_scans.sh` + `normalize.py` (8 static, control-mapped) | ✅ done (unit-tested) |
+| 1 | `compliance.yml` required-check Action on fork | ✅ done (installed) |
+| 2 Orchestrator | `devin.py` (create/get/list/message) | ✅ done |
+| 2 | `github_client.py` (required check, comment, CI read) | ✅ done |
+| 2 | `state.py` (SQLite) + `poller.py` (session + CI poll loop) | ✅ done |
+| 2 | `main.py` webhook → playbook → session → required-check | ✅ done (smoke-tested) |
+| 3 Playbook | `playbook.py` (docs + scan + proxy-PR + comment + ticket + POA&M) | ✅ done |
+| 5 Board | built-in ticket board API (`POST /api/tickets`) | ✅ done (Kanban UI = Phase 4) |
+| 4 Dashboard | instances · PRs+CI · findings/POA&M burn-down · plans · Kanban | ⏳ next |
 | 4 | chat → orchestrator (state + steer session) | ⬜ |
-| 5 Board | built-in ticket board (API + Kanban) | ⬜ |
 | 6 Docker | `docker compose up` clean | ⬜ |
 | 8 Packaging | `setup.sh` · "Run Demo" button + `demo.sh` · `AGENT_ONBOARD.md` | ⬜ |
 | 6 Deliver | README · Loom script | ⬜ |
+| — E2E | fire ONE real Devin session on a real PR (needs GH_PERSONAL_TOKEN) | ⬜ deliberate w/ operator |
 
 ## Decisions log
 - **Ticket board:** built-in (dashboard-hosted), not external JIRA (no license). API for Devin to file into.
