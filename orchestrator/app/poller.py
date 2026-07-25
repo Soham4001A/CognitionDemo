@@ -116,7 +116,7 @@ async def _task_tick(store, devin, gh, t: dict[str, Any]) -> None:
         except Exception:
             pass
 
-    store.upsert_task(issue, **fields)
+    store.update_task(issue, **fields)
 
 
 async def _tick(store, devin, gh, r: dict[str, Any]) -> None:
@@ -199,7 +199,7 @@ async def _tick(store, devin, gh, r: dict[str, Any]) -> None:
             except Exception as e:
                 store.log("warn", f"set check {state} failed: {e}", pr)
 
-    store.upsert_review(pr, **fields)
+    store.update_review(pr, **fields)
 
 
 async def _gate(gh, proxy_pr) -> tuple[str, str, bool]:

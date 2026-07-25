@@ -90,6 +90,18 @@ class Store:
             self.db.execute(f"UPDATE reviews SET {sets} WHERE pr=?", (*fields.values(), pr))
         self.db.commit()
 
+    def update_review(self, pr: int, **fields) -> None:
+        """Update-only (never insert). The poller uses this so a row deleted by reset() while a
+        session is mid-tick is not resurrected."""
+        if self.db.execute("SELECT pr FROM reviews WHERE pr=?", (pr,)).fetchone() is None:
+            return
+        fields.setdefault("updated", time.time())
+        if "structured" in fields and not isinstance(fields["structured"], str):
+            fields["structured"] = json.dumps(fields["structured"])
+        sets = ",".join(f"{k}=?" for k in fields)
+        self.db.execute(f"UPDATE reviews SET {sets} WHERE pr=?", (*fields.values(), pr))
+        self.db.commit()
+
     def get_review(self, pr: int) -> dict[str, Any] | None:
         r = self.db.execute("SELECT * FROM reviews WHERE pr=?", (pr,)).fetchone()
         return _row(self.db.cursor(), r) if r else None
@@ -141,6 +153,15 @@ class Store:
         else:
             sets = ",".join(f"{k}=?" for k in fields)
             self.db.execute(f"UPDATE tasks SET {sets} WHERE issue=?", (*fields.values(), issue))
+        self.db.commit()
+
+    def update_task(self, issue: int, **fields) -> None:
+        """Update-only (never insert) — poller counterpart to update_review; survives reset() races."""
+        if self.db.execute("SELECT issue FROM tasks WHERE issue=?", (issue,)).fetchone() is None:
+            return
+        fields.setdefault("updated", time.time())
+        sets = ",".join(f"{k}=?" for k in fields)
+        self.db.execute(f"UPDATE tasks SET {sets} WHERE issue=?", (*fields.values(), issue))
         self.db.commit()
 
     def get_task(self, issue: int) -> dict[str, Any] | None:
