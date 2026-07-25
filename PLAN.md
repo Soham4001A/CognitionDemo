@@ -11,6 +11,21 @@ It is the pattern we already run internally (an orchestrator dispatches atomic t
 
 Why it's *uniquely* a Devin play: a script/Dependabot can bump a version. It **cannot** read an ambiguous multi-file diff, decide the docs are now stale and rewrite them correctly, triage a SAST finding and fix it without breaking the app, or draft the POA&M narrative that maps the finding to an 800-53 control. That judgment work — done autonomously, as a *required gate*, on **every** PR — is the thing that isn't practical without an autonomous coding agent.
 
+## 0.5 What shipped (two event-driven loops)
+
+The build grew from one loop into two, both with Devin as the primitive:
+
+1. **Issue remediation (the hook, Part 1):** a filed issue labeled `sentinel:remediate` → an `issues`
+   webhook → a Devin session that fixes it in-container and opens a PR that `Closes #N`. Merge → the
+   issue closes itself → the task resolves on the dashboard.
+2. **PR compliance gate (the depth):** the loop in §1 below — Devin as a required reviewer on every PR.
+
+Also shipped beyond the original plan: **Demo Control** (dashboard + `demo.sh`: reset/seed/remediate/
+gate-pr for repeatable live demos), **fusion** of Devin's native PR review into the single verdict
+comment, `devin/compliance` as the **sole required check** in the fork's branch protection, and a
+`/how-it-works.html` walkthrough with an "Under the hood" technical breakdown. Proven live end-to-end:
+issue → Devin → PR that `Closes #N` → merged → auto-closed; and PR → proxy PR → gate `success`.
+
 ## 1. The loop (per PR)
 
 ```
@@ -104,11 +119,17 @@ Dashboard, in POA&M/MTTR language:
 
 ## 6. Deliverables → take-home mapping
 
-- **Part 1 (use case + issues):** the fork; seed issues = the compliance findings Devin remediates.
-- **Part 2 (event-driven automation):** `pull_request.opened` webhook → orchestrator → Devin sessions → PRs/comments/tickets (observable outputs).
-- **Part 3 (observability):** the dashboard (instances, findings burn-down, MTTR, CI status).
-- **Docker + public repo + README:** `sentinel/` repo, `docker compose up`.
-- **Loom (<5 min):** What (compliance/doc toil as a required gate) · How (live: open a PR → watch Sentinel attach, fix, PR, block) · Why (Devin's judgment as a required gate — impossible with a script) · When (DAST, real JIRA/ServiceNow, air-gapped enclave, multi-repo, policy-as-code).
+- **Part 1 (use case + issues):** the fork + **5 seeded, control-mapped Issues** (#5–#9) that Devin
+  remediates via PRs that `Closes #N`.
+- **Part 2 (event-driven automation):** three live triggers — `issues` (label → remediate),
+  `pull_request` (opened → gate), `issue_comment` (@-mention) — each managing Devin sessions that
+  produce real PRs / comments / tickets (observable outputs).
+- **Part 3 (observability):** the dashboard — issue→PR→closed track, PR-gate track, findings-by-control
+  burn-down, MTTR, audit trail; deep-links out to Devin per session.
+- **Docker + public repo + README:** `Soham4001A/CognitionDemo`, one container, `docker compose up` (pinned deps).
+- **Loom (<5 min):** What (backlog + compliance toil as event-driven Devin work) · How (live: label an
+  issue → Devin fixes → PR closes it; then the PR gate) · Why (Devin's judgment, event-driven, as a
+  required gate) · When (DAST, real JIRA/ServiceNow, air-gapped enclave, multi-repo, policy-as-code).
 
 ## 7. Risks / unknowns → de-risk
 
