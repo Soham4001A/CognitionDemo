@@ -369,11 +369,25 @@
 
   <!-- ============ UNDER THE HOOD ============ -->
   <style>
-    .arch { overflow-x: auto; background: var(--surface); border: 1px solid var(--line);
-            border-radius: 13px; padding: 18px 20px; margin: 0 0 22px; }
-    .arch pre { margin: 0; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.5;
-                color: var(--text); white-space: pre; }
-    .arch .accent { color: var(--accent-2); }
+    .arch { display: flex; align-items: stretch; gap: 0; margin: 0 0 22px; overflow-x: auto; }
+    .arch-col { background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+                padding: 14px 16px; flex: 1 1 0; min-width: 172px; }
+    .arch-col.mid { flex: 1.5 1 0; border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+                    background: color-mix(in srgb, var(--accent) 5%, var(--surface)); }
+    .arch-h { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .13em; text-transform: uppercase;
+              color: var(--accent-2); font-weight: 700; margin-bottom: 11px; }
+    .arch-col ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+    .arch-col li { font-size: 13px; line-height: 1.3; }
+    .arch-col li b { font-family: var(--font-mono); font-size: 12.5px; color: var(--text); font-weight: 600; }
+    .arch-col li span { color: var(--muted); display: block; font-size: 11.5px; margin-top: 1px; }
+    .arch-arrow { display: flex; flex-direction: column; align-items: center; justify-content: center;
+                  padding: 0 9px; flex: none; }
+    .arch-arrow .lbl { font-family: var(--font-mono); font-size: 9px; letter-spacing: .09em; text-transform: uppercase;
+                       color: var(--muted); margin-bottom: 4px; }
+    .arch-arrow .a { font-size: 17px; color: var(--accent); line-height: 1; }
+    @media (max-width: 680px) { .arch { flex-direction: column; }
+      .arch-arrow { flex-direction: row-reverse; gap: 6px; padding: 6px 0; }
+      .arch-arrow .lbl { margin: 0; } .arch-arrow .a { transform: rotate(90deg); } }
     .decisions { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 6px; }
     .decision { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); padding: 15px 17px; }
     .decision h4 { margin: 0 0 5px; font-size: 15px; letter-spacing: -.01em; }
@@ -392,13 +406,36 @@
         <b>playbook</b> (what Devin is told to do), not the plumbing.</p>
     </div>
 
-    <div class="arch"><pre>  <span class="accent">EVENTS</span>                        <span class="accent">ORCHESTRATOR</span>  ·  one container            <span class="accent">ACTS ON</span>
-  ────────────────────         ──────────────────────────────────         ─────────────────
-  issues.labeled       ┐       main.py         3 webhooks · demo API       Devin API
-  pull_request.opened  ┼─hook─▶ playbook.py     the two Devin job specs  ─▶  create · poll · steer
-  issue_comment  @      ┘       poller.py       track session → drive gate
-  Demo Control  ─POST──────────▶ github_client.py  status · PR · issue    ─▶  GitHub REST
-                                state.py        SQLite   ·   static/ dashboard   checks · PRs · issues</pre></div>
+    <div class="arch">
+      <div class="arch-col">
+        <div class="arch-h">Events</div>
+        <ul>
+          <li><b>issues.labeled</b></li>
+          <li><b>pull_request.opened</b></li>
+          <li><b>issue_comment</b><span>@sentinel / @devin</span></li>
+          <li><b>Demo Control</b><span>POST</span></li>
+        </ul>
+      </div>
+      <div class="arch-arrow"><span class="lbl">webhook</span><span class="a">&#9654;</span></div>
+      <div class="arch-col mid">
+        <div class="arch-h">Orchestrator · one container</div>
+        <ul>
+          <li><b>main.py</b><span>3 webhooks · demo API · serves the dashboard</span></li>
+          <li><b>playbook.py</b><span>the two Devin job specs</span></li>
+          <li><b>poller.py</b><span>track session &rarr; drive the gate</span></li>
+          <li><b>github_client.py</b><span>status · PR · issue</span></li>
+          <li><b>state.py</b><span>SQLite · static/ dashboard</span></li>
+        </ul>
+      </div>
+      <div class="arch-arrow"><span class="lbl">API</span><span class="a">&#9654;</span></div>
+      <div class="arch-col">
+        <div class="arch-h">Acts on</div>
+        <ul>
+          <li><b>Devin API</b><span>create · poll · steer</span></li>
+          <li><b>GitHub REST</b><span>checks · PRs · issues</span></li>
+        </ul>
+      </div>
+    </div>
 
     <div class="tbl-scroll" style="margin-bottom:26px">
       <table>
