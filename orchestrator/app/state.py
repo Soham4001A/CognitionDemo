@@ -214,7 +214,8 @@ class Store:
             "issues_open": sum(1 for t in tasks if t.get("phase") not in ("resolved", "closed")),
             "issues_remediated": sum(1 for t in tasks if t.get("phase") in ("resolved", "closed")),
             "by_control": _count(findings, "control"),
-            "by_severity": _count(findings, "severity"),
+            # normalize severity casing so "Medium" and "medium" don't split into two bars
+            "by_severity": _count([{**f, "severity": str(f.get("severity") or "").lower()} for f in findings], "severity"),
             "mttr_seconds": round(sum(mttrs) / len(mttrs), 1) if mttrs else None,
         }
 
